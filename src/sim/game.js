@@ -10,10 +10,10 @@ import {DT, PRESS_BUFFER, AIM_REACH, COUNTDOWN_READY, COUNTDOWN_GO, KO_TICKS} fr
 import {clamp, segSeg} from './util.js';
 import {mkFighter, mkInput, finishPose, updateFighter} from './fighter.js';
 import {bladeContact, bladePush, clash, kill} from './combat.js';
-import {mkAI, aiStep} from './ai.js';
+import {mkAI, aiStep, resetAI} from './ai.js';
 import {rand, random} from './rng.js';
 import {getMap, MAPS, MAP_KEYS, DEFAULT_MAP} from './maps.js';
-import {isOut, boundX} from './terrain.js';
+import {hazardHit, pushX} from './terrain.js';
 import {emit} from './events.js';
 
 // A brand-new game state with nothing carried over.
@@ -68,10 +68,10 @@ function pickMap(S) {
 function startRound(S) {
   if (S.mode.mapPick === 'round' && S.round > 0) S.map = pickMap(S);
   const m = getMap(S);
-  for (let p = 0; p < 2; p++) { const sp = m.spawns[p]; S.F[p] = mkFighter(p, sp.x, m.floor, sp.face); }
+  for (let p = 0; p < 2; p++) { const sp = m.spawns[p]; S.F[p] = mkFighter(p, sp.x, sp.y, sp.face); }
   for (const f of S.F) finishPose(f);
   for (const i of S.inp) { for (const k in i.buf) i.buf[k] = 0; }
-  for (const a of S.AI) { a.t = rand(S, .2, .5); a.move = 0; a.holdUp = 0; a.targetAng = .2; }
+  for (const a of S.AI) { resetAI(a); a.t = rand(S, .2, .5); }
   S.phase = 'countdown'; S.timer = 0; S.koWho = null; S.hitstop = 0; S.round++;
   emit('roundStart', {map: S.map, name: m.name});
 }
@@ -111,12 +111,13 @@ function applyCommand(i, cmd) {
   i.aim = cmd.aim ? {x: q(cmd.aim.x), y: q(cmd.aim.y)} : null;
 }
 
-// Countdown calls and the pause after a touch.
-function goOut(f) {
-  emit('text', {x: f.x, y: Math.min(f.y, 470) - 110, text: 'OUT', color: 'ink'});
-  kill(f, {p: {x: f.x, y: f.y - 50}, vx: f.vx, vy: f.vy, sp: 0, part: 'out', tip: false, lethal: true});
+// Spikes (or a fall out of the world) kill like a blade does.
+function spiked(f, at) {
+  emit('sfx', {name: 'spike'});
+  kill(f, {p: at, vx: f.vx * .3, vy: Math.min(f.vy, 200) * .3, sp: 120, part: 'spikes', tip: false, lethal: true});
 }
 
+// Countdown calls and the pause after a touch.
 function updateFlow(S) {
   if (S.phase === 'countdown') {
     if (S.timer === 0) { emit('callout', {text: 'EN GARDE', color: 'ink', dur: .55}); emit('sfx', {name: 'ready'}); }
@@ -144,7 +145,7 @@ export function step(S, cmds) {
   // bodies don't overlap
   if (a.alive && b.alive) {
     const dx = b.x - a.x;
-    if (Math.abs(dx) < 20 && Math.abs(a.y - b.y) < 70) { const push = (20 - Math.abs(dx)) / 2 * (Math.sign(dx) || 1); a.x = boundX(map, a.x - push); b.x = boundX(map, b.x + push); }
+    if (Math.abs(dx) < 20 && Math.abs(a.y - b.y) < 70) { const push = (20 - Math.abs(dx)) / 2 * (Math.sign(dx) || 1); a.x = pushX(a, map, -push); b.x = pushX(b, map, push); }
   }
 
   // blade against blade
@@ -161,11 +162,11 @@ export function step(S, cmds) {
     else { if (h1) bladePush(a, b, map); if (h2) bladePush(b, a, map); }
   }
 
-  // out of the arena (past a ring-out line, or fallen): a touch for the opponent; both = coup double
+  // spikes: a touch for the opponent; both at once = coup double
   if (S.phase === 'fight' && a.alive && b.alive) {
-    const outA = isOut(a, map), outB = isOut(b, map);
-    if (outA) goOut(a); if (outB) goOut(b);
-    if (outA || outB) roundOver(S, outB, outA);
+    const hA = hazardHit(a, map), hB = hazardHit(b, map);
+    if (hA) spiked(a, hA); if (hB) spiked(b, hB);
+    if (hA || hB) roundOver(S, !!hB, !!hA);
   }
 
   updateFlow(S);

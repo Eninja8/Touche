@@ -22,7 +22,7 @@ const check = (ok, msg) => { console.log((ok ? 'PASS ' : 'FAIL ') + msg); if (!o
 
 // 1. forbidden things inside the simulation
 const banned = [/Math\.random/, /Date\.now|new Date/, /performance\.now/, /\bdocument\./, /\bwindow\./, /localStorage/];
-for (const f of fs.readdirSync(simDir)) {
+for (const f of fs.readdirSync(simDir, {recursive: true}).filter(f => f.endsWith('.js'))) {
   const lines = fs.readFileSync(path.join(simDir, f), 'utf8').split('\n');
   lines.forEach((l, n) => { const code = l.replace(/\/\/.*$/, ''); for (const re of banned) if (re.test(code)) check(false, `${f}:${n + 1} uses ${re}`); });
 }
@@ -186,14 +186,18 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
 }
 
 // 8. swing-spam: walking forward whipping the blade up and down must not beat the Hard CPU most of the time
+// (two matches of 120 rounds, so one unlucky seed doesn't decide it)
 {
-  const G = createGame(1); newMatch(G, {vsCPU: true, diff: 'hard', target: 1e9, seed: 7});
-  let t = 0, rounds = 0, wins = 0;
-  while (rounds < 120) {
-    const toward = Math.sign(G.F[1].x - G.F[0].x) || 1, up = Math.floor(++t / 26) % 2 === 0;
-    const held = {left: toward < 0, right: toward > 0, up: false, down: false, raise: false, lower: false};
-    step(G, [{held, presses: [], aim: {x: 110 * toward, y: up ? -120 : 120}}, null]);
-    for (const e of drain()) if (e.type === 'callout' && e.ko) { rounds++; if (G.koWho === 0) wins++; }
+  let rounds = 0, wins = 0;
+  for (const seed of [7, 8]) {
+    const G = createGame(1); newMatch(G, {vsCPU: true, diff: 'hard', target: 1e9, seed});
+    let t = 0, n = 0;
+    while (n < 120) {
+      const toward = Math.sign(G.F[1].x - G.F[0].x) || 1, up = Math.floor(++t / 26) % 2 === 0;
+      const held = {left: toward < 0, right: toward > 0, up: false, down: false, raise: false, lower: false};
+      step(G, [{held, presses: [], aim: {x: 110 * toward, y: up ? -120 : 120}}, null]);
+      for (const e of drain()) if (e.type === 'callout' && e.ko) { n++; rounds++; if (G.koWho === 0) wins++; }
+    }
   }
   check(wins / rounds < .5, `swing-spamming forward wins ${Math.round(100 * wins / rounds)}% of rounds against the Hard CPU (was 64% before the beat fixes)`);
 }

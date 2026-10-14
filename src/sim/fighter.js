@@ -9,11 +9,13 @@ import {
 import {clamp, lerp, ik} from './util.js';
 import {emit} from './events.js';
 import {collide, SPEED_MULT} from './terrain.js';
+import {tryGrab, hang} from './rope.js';
 
 export function mkFighter(id, x, y, face) {
   return {
     id, x, y, vx: 0, vy: 0, face, onGround: true, onPlat: false, crouch: false,
     slideT: 0, dashT: 0, dashCD: 0, airDash: true, airJump: true, wallSide: 0, wallT: 0, coyote: 0, dropT: 0, speedT: 0, padUp: false,
+    grip: 1, rope: -1, ropeCD: 0, climbing: false, // grip of the ground underfoot (ice is low); rope: index of the rope held, or -1
     angle: .18, deflect: 0, lunge: null, lungeCD: 0, stunT: 0, noLethal: 0, beatT: 0, beatCD: 0, swingLock: false, alive: true, phase: 0,
     P: null, prevHand: null, prevTip: null, tipSpeed: 0, swingSpeed: 0, swingRate: 0, prevAng: null, angSpd: 5.2,
   };
@@ -29,6 +31,7 @@ export function pose(f) {
   if (f.slideT > 0) { hipH = 18; lean = -.5; }
   else if (f.crouch) { hipH = 28; lean = .35; }
   if (!f.onGround && f.slideT <= 0) { hipH = 48; lean = .1 + clamp(f.vx * s / 1500, -.2, .2); }
+  if (f.rope >= 0) { hipH = 52; lean = .04; }
   if (L) {
     const t = L.t;
     if (t < .05) { armLen = ARM - 8; lean -= .05; }
@@ -41,7 +44,8 @@ export function pose(f) {
   const head = {x: neck.x + Math.sin(lean) * s * 12, y: neck.y - Math.cos(lean) * 12};
   const sh = {x: lerp(hip.x, neck.x, .9), y: lerp(hip.y, neck.y, .9)};
   let fF, fB;
-  if (f.slideT > 0) { fF = {x: f.x + 30 * s, y: f.y}; fB = {x: f.x - 4 * s, y: f.y - 2}; }
+  if (f.rope >= 0) { const c = f.climbing ? Math.sin(f.phase) * 7 : 0; fF = {x: f.x + 7 * s, y: f.y - 4 - c}; fB = {x: f.x - 2 * s, y: f.y + c}; }
+  else if (f.slideT > 0) { fF = {x: f.x + 30 * s, y: f.y}; fB = {x: f.x - 4 * s, y: f.y - 2}; }
   else if (!f.onGround) { const tk = f.vy < 0 ? 14 : 6; fF = {x: f.x + 10 * s, y: f.y - tk}; fB = {x: f.x - 10 * s, y: f.y - tk + 4}; }
   else if (Math.abs(f.vx) > 30) {
     const st = Math.min(1, Math.abs(f.vx) / RUN_MAX) * 16 + 4, ph = f.phase, sg = Math.sign(f.vx);
@@ -55,7 +59,8 @@ export function pose(f) {
   const elbow = ik(sh, hand, 15, 15, s);
   const tip = {x: hand.x + dx * BLADE, y: hand.y + dy * BLADE};
   const thrusting = L && L.t > .05 && L.t < .2;
-  const bHand = {x: sh.x - s * 16, y: sh.y + (thrusting ? -6 : 12)};
+  // the back hand holds the rope while hanging (the rope is 5 px in front of the body)
+  const bHand = f.rope >= 0 ? {x: f.x + s * 5, y: sh.y - 22} : {x: sh.x - s * 16, y: sh.y + (thrusting ? -6 : 12)};
   const bElbow = ik(sh, bHand, 13, 13, -s);
   return {hip, neck, head, sh, fF, fB, kF, kB, hand, elbow, tip, bHand, bElbow, dx, dy};
 }
@@ -97,15 +102,27 @@ export function finishPose(f, flipped) {
   if (f.swingLock && f.swingSpeed < BEAT_SPEED) f.swingLock = false;
 }
 
+// Blade angle. Mouse: turn toward the crosshair (aim = offset from the shoulder)
+// at a capped speed. After a turn the angle can be "behind" (up to π - ANG_MIN),
+// and it sweeps back over the top. Keyboard: raise/lower keys.
+function turnBlade(f, i, stunned, dt) {
+  const spdMul = stunned ? .4 : 1;
+  if (i.aim) {
+    const tg = clamp(Math.atan2(-i.aim.y, i.aim.x * f.face), ANG_MIN, ANG_MAX), sp = MOUSE_TURN * spdMul;
+    f.angle = clamp(f.angle + clamp(tg - f.angle, -sp * dt, sp * dt), ANG_MIN, Math.PI - ANG_MIN);
+  } else { const ad = (i.raise ? 1 : 0) - (i.lower ? 1 : 0); f.angle = clamp(f.angle + ad * f.angSpd * spdMul * dt, ANG_MIN, ANG_MAX); }
+  f.deflect *= Math.exp(-7 * dt);
+}
+
 const puff = (x, y, n) => emit('puff', {x, y, n});
 const sfx = name => emit('sfx', {name});
 
 // Advance fighter f by one tick. i = its input, o = the opponent, map = the arena.
 export function updateFighter(f, i, o, dt, map) {
   if (!f.alive) return;
-  const prevX = f.x, prevY = f.y, grip = map.grip || 1;
+  const prevX = f.x, prevY = f.y, grip = f.grip;
   f.dashCD = Math.max(0, f.dashCD - dt); f.lungeCD = Math.max(0, f.lungeCD - dt); f.noLethal = Math.max(0, f.noLethal - dt); f.beatT = Math.max(0, f.beatT - dt); f.beatCD = Math.max(0, f.beatCD - dt);
-  f.dropT = Math.max(0, f.dropT - dt); f.wallT = Math.max(0, f.wallT - dt); f.coyote = Math.max(0, f.coyote - dt); f.speedT = Math.max(0, f.speedT - dt);
+  f.dropT = Math.max(0, f.dropT - dt); f.wallT = Math.max(0, f.wallT - dt); f.coyote = Math.max(0, f.coyote - dt); f.speedT = Math.max(0, f.speedT - dt); f.ropeCD = Math.max(0, f.ropeCD - dt);
   for (const k in i.buf) i.buf[k] = Math.max(0, i.buf[k] - dt);
   const stunned = f.stunT > 0; if (stunned) f.stunT -= dt;
   const dir = (i.right ? 1 : 0) - (i.left ? 1 : 0);
@@ -133,6 +150,10 @@ export function updateFighter(f, i, o, dt, map) {
   }
   if (i.buf.attack > 0 && !f.lunge && f.lungeCD <= 0 && !stunned && f.slideT <= 0) { i.buf.attack = 0; f.lunge = {t: 0, fired: false}; f.lungeCD = .52; }
   const recovering = f.lunge && f.lunge.t > .2;
+
+  // hanging on a rope: climb or let go (rope.js); the blade still works
+  if (f.rope >= 0 && hang(f, i, dir, map, dt)) { turnBlade(f, i, stunned, dt); finishPose(f, flipped); return; }
+  f.climbing = false;
 
   // dash (no direction held = backstep)
   if (i.buf.dash > 0 && f.dashCD <= 0 && !stunned && (f.onGround || f.airDash)) {
@@ -165,15 +186,7 @@ export function updateFighter(f, i, o, dt, map) {
     else f.vx -= Math.sign(f.vx) * Math.min(Math.abs(f.vx), fr * dt);
   }
 
-  // Blade angle. Mouse: turn toward the crosshair (aim = offset from the shoulder)
-  // at a capped speed. After a turn the angle can be "behind" (up to π - ANG_MIN),
-  // and it sweeps back over the top. Keyboard: raise/lower keys.
-  const spdMul = stunned ? .4 : 1;
-  if (i.aim) {
-    const tg = clamp(Math.atan2(-i.aim.y, i.aim.x * f.face), ANG_MIN, ANG_MAX), sp = MOUSE_TURN * spdMul;
-    f.angle = clamp(f.angle + clamp(tg - f.angle, -sp * dt, sp * dt), ANG_MIN, Math.PI - ANG_MIN);
-  } else { const ad = (i.raise ? 1 : 0) - (i.lower ? 1 : 0); f.angle = clamp(f.angle + ad * f.angSpd * spdMul * dt, ANG_MIN, ANG_MAX); }
-  f.deflect *= Math.exp(-7 * dt);
+  turnBlade(f, i, stunned, dt);
 
   // gravity, short hop, wall slide
   // (letting go of jump early cuts a jump short, but not a jump-pad launch)
@@ -186,6 +199,7 @@ export function updateFighter(f, i, o, dt, map) {
   // walls, floor (and gaps), platforms, ceiling, pads: see terrain.js
   const wasGround = f.onGround;
   collide(f, map, prevX, prevY, wasGround);
+  if (!f.onGround) tryGrab(f, map, prevX, i);
   if (wasGround && !f.onGround && f.vy >= 0) f.coyote = .08;
   if (f.onGround) f.phase += Math.abs(f.vx) * dt * .075;
   finishPose(f, flipped);

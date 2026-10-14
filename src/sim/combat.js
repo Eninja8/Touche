@@ -4,7 +4,7 @@ import {DT, ARM, BLADE, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HIT
 import {lerp, distPtSeg, distPtSegX} from './util.js';
 import {bodyParts, lungeActive} from './fighter.js';
 import {emit} from './events.js';
-import {boundX} from './terrain.js';
+import {pushX} from './terrain.js';
 
 // The blade is checked at SAMPLES+1 points, from 30% of the way along it (near the
 // guard) out to the point. 12 gaps keep them closer together than a limb is thick.
@@ -46,10 +46,10 @@ function overlap(A, B, ox) {
   return worst;
 }
 
-// Slide fighter f sideways by dx (stopping at solid walls), pose included. Returns how far it moved.
-// On open-ended maps nothing stops it, so a blade can shove someone out.
+// Slide fighter f sideways by dx (stopping at walls and blocks), pose included. Returns how far
+// it moved. Nothing stops it at a ledge's edge, so a blade can shove someone into a pit.
 function slide(f, dx, map) {
-  const nx = boundX(map, f.x + dx), moved = nx - f.x;
+  const nx = pushX(f, map, dx), moved = nx - f.x;
   f.x = nx;
   for (const k in f.P) if (f.P[k] && f.P[k].x !== undefined) f.P[k].x += moved;
   return moved;
