@@ -8,6 +8,7 @@
 // frame rate. Slow motion after a touch only changes how fast ticks are fed in.
 
 import {DT} from './sim/constants.js';
+import {getMap} from './sim/maps.js';
 import {createGame, newMatch, step} from './sim/game.js';
 import {drain} from './sim/events.js';
 import {settings} from './ui/settings.js';
@@ -95,7 +96,7 @@ function dispatch(events) {
       case 'roundStart': resetRound(S); resetCross(S.F[0].face); slow = 0; setLamp(0, false); setLamp(1, false); hud(S); break;
       case 'score': hud(S); break;
       case 'matchOver': releaseLock(); showGameOver(S, e.winner); break;
-      case 'matchStart': case 'clearDecals': clearDecals(); break;
+      case 'matchStart': case 'clearDecals': clearDecals(getMap(S)); break;
     }
   }
 }

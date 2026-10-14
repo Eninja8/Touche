@@ -84,6 +84,12 @@
               <label><input type="radio" name="mouseaim" value="off"><span>Off</span></label>
             </div>
           </div>
+          <div class="row"><span class="lbl">Aim indicator</span>
+            <div class="seg" role="radiogroup" aria-label="Aim indicator">
+              <label><input type="radio" name="aimind" value="arrow"><span>Arrow</span></label>
+              <label><input type="radio" name="aimind" value="off"><span>Off</span></label>
+            </div>
+          </div>
           <label class="row" for="sens"><span class="lbl">Mouse sensitivity</span><input type="range" id="sens" min="20" max="400" step="5"><output id="sensOut" for="sens">1.00</output></label>
           <p class="hint">Mouse on: against the CPU you are Red; with a friend, Red aims with the mouse and Green uses the keyboard. Online, each player uses their own mouse. Off: everyone uses keys to raise and lower the blade.</p>
           <div class="tablewrap"><table class="binds"><thead><tr><th>Action</th><th class="p1">Red</th><th class="p2">Green</th></tr></thead><tbody id="bindRows"></tbody></table></div>

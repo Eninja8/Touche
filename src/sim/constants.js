@@ -1,8 +1,5 @@
-// Fixed numbers that define the arena and how fighters move.
+// Fixed numbers that define how fighters move. (The arena itself is in maps.js.)
 // Changing any of these changes gameplay, so treat them as "the rules".
-
-// World size in logical pixels. The canvas is scaled to fit the screen.
-export const W = 960, H = 540, GROUND = 462, LEFT = 18, RIGHT = W - 18;
 
 // One simulation tick lasts 1/120 of a second, always.
 export const TICK_HZ = 120, DT = 1 / TICK_HZ;
@@ -14,11 +11,6 @@ export const DASH_V = 760, DASH_T = 0.13, DASH_CD = 0.55, SLIDE_T = 0.42, SLIDE_
 
 // Blade: length, arm length, how fast a blade must move to kill, and the aim limits (radians)
 export const BLADE = 76, ARM = 24, LETHAL = 600, ANG_MIN = -1.15, ANG_MAX = 1.25;
-
-// Piste markings: the strip is 14 "metres" wide
-export const PX_M = (RIGHT - LEFT) / 14, CENTER = W / 2;
-
-export const PLATFORMS = [{x: 110, y: 350, w: 180}, {x: 670, y: 350, w: 180}, {x: 390, y: 252, w: 180}];
 
 // How long a key press is remembered if it can't be used straight away (seconds)
 export const PRESS_BUFFER = 0.13;

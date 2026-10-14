@@ -6,17 +6,18 @@
 //  - Everything lives in S, so `snapshot(S)` saves the game and restoring it rewinds.
 //  - Same S + same commands in = same S out, on any machine.
 
-import {DT, LEFT, RIGHT, CENTER, PX_M, PRESS_BUFFER, AIM_REACH, COUNTDOWN_READY, COUNTDOWN_GO, KO_TICKS} from './constants.js';
+import {DT, PRESS_BUFFER, AIM_REACH, COUNTDOWN_READY, COUNTDOWN_GO, KO_TICKS} from './constants.js';
 import {clamp, segSeg} from './util.js';
 import {mkFighter, mkInput, finishPose, updateFighter} from './fighter.js';
 import {bladeContact, clash, kill} from './combat.js';
 import {mkAI, aiStep} from './ai.js';
 import {rand} from './rng.js';
+import {getMap, DEFAULT_MAP} from './maps.js';
 import {emit} from './events.js';
 
 export function createGame(seed) {
   const S = {
-    tick: 0, rng: seed | 0,
+    tick: 0, rng: seed | 0, map: DEFAULT_MAP,
     mode: {demo: true, vsCPU: false, diff: 'normal', target: 5},
     phase: 'countdown', // countdown → fight → ko → (next round) … → over
     timer: 0,           // ticks spent in the current phase (countdown / ko)
@@ -34,9 +35,9 @@ export const snapshot = S => structuredClone(S);
 export const isAI = (S, p) => S.mode.demo || (p === 1 && S.mode.vsCPU);
 
 // Start the menu exhibition bout, or a real match.
-// opts: {demo, vsCPU, diff, target, seed}
+// opts: {demo, vsCPU, diff, target, seed, map}
 export function newMatch(S, opts) {
-  S.rng = opts.seed | 0;
+  S.rng = opts.seed | 0; S.map = opts.map || DEFAULT_MAP;
   S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, diff: opts.diff || 'normal', target: opts.target || 5};
   S.scores = [0, 0]; S.demoRounds = 0;
   if (S.mode.demo) { S.AI[0].diff = S.AI[1].diff = 'normal'; }
@@ -46,7 +47,8 @@ export function newMatch(S, opts) {
 }
 
 function startRound(S) {
-  S.F[0] = mkFighter(0, CENTER - 2 * PX_M, 1); S.F[1] = mkFighter(1, CENTER + 2 * PX_M, -1);
+  const m = getMap(S);
+  for (let p = 0; p < 2; p++) { const sp = m.spawns[p]; S.F[p] = mkFighter(p, sp.x, m.floor, sp.face); }
   for (const f of S.F) finishPose(f);
   for (const i of S.inp) { for (const k in i.buf) i.buf[k] = 0; }
   for (const a of S.AI) { a.t = rand(S, .2, .5); a.move = 0; a.holdUp = 0; a.targetAng = .2; }
@@ -99,10 +101,10 @@ export function step(S, cmds) {
   for (let p = 0; p < 2; p++) if (!isAI(S, p)) applyCommand(S.inp[p], cmds[p]);
   if (S.hitstop > 0) { S.hitstop--; return false; }
 
-  const dt = DT, ph = S.phase, live = ph === 'fight' || ph === 'ko' || ph === 'over';
+  const dt = DT, map = getMap(S), {left: LEFT, right: RIGHT} = map.walls, ph = S.phase, live = ph === 'fight' || ph === 'ko' || ph === 'over';
   for (let p = 0; p < 2; p++) if (isAI(S, p)) aiStep(S, p, dt);
   const [a, b] = S.F;
-  if (live) { updateFighter(a, S.inp[0], b, dt); updateFighter(b, S.inp[1], a, dt); }
+  if (live) { updateFighter(a, S.inp[0], b, dt, map); updateFighter(b, S.inp[1], a, dt, map); }
   else for (const f of S.F) if (f.alive) finishPose(f);
 
   // bodies don't overlap

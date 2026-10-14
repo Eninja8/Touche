@@ -5,7 +5,13 @@
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
-- **Next:** Phase 2, online 1v1 with room codes. Plan: `docs/ONLINE-PLAN.md`. **Waiting for the owner's OK** (and OK to add PeerJS).
+- **Next:** Part 3, online 1v1 with room codes (PeerJS + rollback). Plan: `docs/ONLINE-PLAN.md`.
+
+## Roadmap
+1. Online 1v1 with room codes (in progress).
+2. More maps (the arena is already map data in `src/sim/maps.js`).
+3. Controller support (Gamepad API).
+4. Windows EXE on Steam with Steam lobbies and friend invites.
 
 ## Session log
 
@@ -39,3 +45,10 @@ Owner approved the online plan and PeerJS with its free public server.
 - *Settings:* "Aim with mouse" (Red uses mouse / Off), mouse sensitivity (0.2–4.0), and a fullscreen key (unbound by default).
 - *Full window:* the game fills the browser window, with the scoring box floating over the top. The arena stays 960×540 and is scaled to fit; extra space is painted as more hall, with the area past the side walls slightly dimmed. Fullscreen button in the menu, pause screen and settings.
 - Tests: new checks that turning keeps the blade's world direction (it moved 0.079 rad on the turn tick, one normal tick of rotation) and that a swing over the top is lethal (950 px/s vs 600 needed). Headless-browser probes: mouse-aimed CPU match plays to the end with no errors; crosshair draws; a refused lock pauses the game with the right hint; wide and tall windows have no black bars.
+
+**Playtest feedback on Part 2** (owner): turning feels good; the blade is a little slow coming around after a turn, but keep it (getting behind your opponent should be an advantage). Reach distance is good, but the crosshair and circle were cluttered. Owner plays at sensitivity 1.5; default stays 1.0. Pausing, fullscreen and resizing all work. Local 2P on one keyboard is cramped, so controller support goes on the roadmap.
+
+**Part 2 follow-ups:**
+- Replaced the crosshair and reach circle with a faint, wide chevron just past blade reach, pointing where the mouse aims. Same aiming system and controls. New setting "Aim indicator: Arrow / Off".
+- Removed the floor text and tick marks.
+- The arena is now map data (`src/sim/maps.js`): size, floor, walls, platforms, spawn points, light/dark colours. The match stores the map name in `S.map`; sim, effects and renderer all read the map. Only the current map ("Fencing hall") exists. Gameplay unchanged: the long determinism test gives exactly the same score as before the change.

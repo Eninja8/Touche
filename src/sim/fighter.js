@@ -2,16 +2,16 @@
 // Pure simulation: no drawing, no sound (sounds/dust are emitted as events).
 
 import {
-  DT, GROUND, LEFT, RIGHT, GRAV, JUMP_V, DJUMP_V, RUN_MAX, CROUCH_MAX, RUN_ACC, AIR_ACC,
-  GROUND_FRIC, AIR_FRIC, DASH_V, DASH_T, DASH_CD, SLIDE_T, SLIDE_V, BLADE, ARM, ANG_MIN, ANG_MAX, PLATFORMS,
+  DT, GRAV, JUMP_V, DJUMP_V, RUN_MAX, CROUCH_MAX, RUN_ACC, AIR_ACC,
+  GROUND_FRIC, AIR_FRIC, DASH_V, DASH_T, DASH_CD, SLIDE_T, SLIDE_V, BLADE, ARM, ANG_MIN, ANG_MAX,
   MOUSE_TURN, AIM_DEADZONE,
 } from './constants.js';
 import {clamp, lerp, ik} from './util.js';
 import {emit} from './events.js';
 
-export function mkFighter(id, x, face) {
+export function mkFighter(id, x, y, face) {
   return {
-    id, x, y: GROUND, vx: 0, vy: 0, face, onGround: true, onPlat: false, crouch: false,
+    id, x, y, vx: 0, vy: 0, face, onGround: true, onPlat: false, crouch: false,
     slideT: 0, dashT: 0, dashCD: 0, airDash: true, airJump: true, wallSide: 0, wallT: 0, coyote: 0, dropT: 0,
     angle: .18, deflect: 0, lunge: null, lungeCD: 0, stunT: 0, noLethal: 0, alive: true, phase: 0,
     P: null, prevHand: null, prevTip: null, tipSpeed: 0, angSpd: 5.2,
@@ -88,8 +88,9 @@ export function finishPose(f, flipped) {
 const puff = (x, y, n) => emit('puff', {x, y, n});
 const sfx = name => emit('sfx', {name});
 
-// Advance fighter f by one tick. i = its input, o = the opponent.
-export function updateFighter(f, i, o, dt) {
+// Advance fighter f by one tick. i = its input, o = the opponent, map = the arena.
+export function updateFighter(f, i, o, dt, map) {
+  const {floor, platforms} = map, {left, right} = map.walls;
   if (!f.alive) return;
   const prevY = f.y;
   f.dashCD = Math.max(0, f.dashCD - dt); f.lungeCD = Math.max(0, f.lungeCD - dt); f.noLethal = Math.max(0, f.noLethal - dt);
@@ -171,12 +172,12 @@ export function updateFighter(f, i, o, dt) {
 
   // walls, floor, platforms
   const wasGround = f.onGround; f.onGround = false; f.onPlat = false;
-  if (f.x <= LEFT) { f.x = LEFT; if (f.vx < 0) f.vx = 0; f.wallSide = -1; f.wallT = .12; }
-  if (f.x >= RIGHT) { f.x = RIGHT; if (f.vx > 0) f.vx = 0; f.wallSide = 1; f.wallT = .12; }
+  if (f.x <= left) { f.x = left; if (f.vx < 0) f.vx = 0; f.wallSide = -1; f.wallT = .12; }
+  if (f.x >= right) { f.x = right; if (f.vx > 0) f.vx = 0; f.wallSide = 1; f.wallT = .12; }
   const land = () => { if (!wasGround && f.vy > 520) { puff(f.x, f.y - 2, 4); sfx('land'); } f.vy = 0; f.onGround = true; f.airDash = true; f.airJump = true; f.wallT = 0; };
-  if (f.y >= GROUND) { f.y = GROUND; land(); }
+  if (f.y >= floor) { f.y = floor; land(); }
   else if (f.vy >= 0 && f.dropT <= 0) {
-    for (const p of PLATFORMS) { if (prevY <= p.y + 1 && f.y >= p.y && f.x > p.x - 4 && f.x < p.x + p.w + 4) { f.y = p.y; land(); f.onPlat = true; break; } }
+    for (const p of platforms) { if (prevY <= p.y + 1 && f.y >= p.y && f.x > p.x - 4 && f.x < p.x + p.w + 4) { f.y = p.y; land(); f.onPlat = true; break; } }
   }
   if (wasGround && !f.onGround && f.vy >= 0) f.coyote = .08;
   if (f.onGround) f.phase += Math.abs(f.vx) * dt * .075;

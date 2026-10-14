@@ -4,7 +4,8 @@
 // None of this affects gameplay, so it lives outside the simulation and may use
 // Math.random. It reacts to events from the sim and is updated once per tick.
 
-import {DT, GRAV, GROUND, LEFT, RIGHT, BLADE, PLATFORMS} from '../sim/constants.js';
+import {DT, GRAV, BLADE} from '../sim/constants.js';
+import {getMap} from '../sim/maps.js';
 import {clamp, lerp} from '../sim/util.js';
 import {lungeActive} from '../sim/fighter.js';
 import {settings} from '../ui/settings.js';
@@ -18,10 +19,10 @@ export const view = {shake: 0, callout: null};
 
 function mkLook() { return {trail: [], ghosts: [], ghostT: 0, band: null}; }
 
-// Blood that lands is painted onto this off-screen canvas (twice the world size for sharpness).
+// Blood that lands is painted onto this off-screen canvas (twice the map size for sharpness).
 export const decals = document.createElement('canvas'); decals.width = 1920; decals.height = 1080;
 const dctx = decals.getContext('2d');
-export function clearDecals() { dctx.clearRect(0, 0, 1920, 1080); }
+export function clearDecals(map) { decals.width = map.width * 2; decals.height = map.height * 2; }
 function splat(x, y, r) { dctx.fillStyle = C.blood; dctx.globalAlpha = .85; dctx.beginPath(); dctx.ellipse(x * 2, y * 2, r * 3.2, r * 1.1, 0, 0, Math.PI * 2); dctx.fill(); dctx.globalAlpha = 1; }
 
 export function sparks(x, y, n) { for (let k = 0; k < n; k++) { const a = rnd(0, Math.PI * 2), s = rnd(150, 620); fx.push({type: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: rnd(.15, .32), max: .32}); } }
@@ -56,9 +57,10 @@ export function onKill(f, hit) {
 }
 
 function verletPoint(p, dt) { const vx = (p.x - p.px) * .995, vy = (p.y - p.py) * .995; p.px = p.x; p.py = p.y; p.x += vx; p.y += vy + GRAV * .8 * dt * dt; }
-function collidePoint(p, r) {
-  if (p.y > GROUND - r) { const vy = p.y - p.py; p.y = GROUND - r; p.py = p.y + vy * .3; p.px = p.x - (p.x - p.px) * .7; }
-  for (const pl of PLATFORMS) { if (p.py <= pl.y - r + 1 && p.y > pl.y - r && p.x > pl.x && p.x < pl.x + pl.w) { const vy = p.y - p.py; p.y = pl.y - r; p.py = p.y + vy * .3; p.px = p.x - (p.x - p.px) * .7; } }
+function collidePoint(p, r, map) {
+  const {floor, platforms} = map, {left: LEFT, right: RIGHT} = map.walls;
+  if (p.y > floor - r) { const vy = p.y - p.py; p.y = floor - r; p.py = p.y + vy * .3; p.px = p.x - (p.x - p.px) * .7; }
+  for (const pl of platforms) { if (p.py <= pl.y - r + 1 && p.y > pl.y - r && p.x > pl.x && p.x < pl.x + pl.w) { const vy = p.y - p.py; p.y = pl.y - r; p.py = p.y + vy * .3; p.px = p.x - (p.x - p.px) * .7; } }
   if (p.x < LEFT - 10) { p.x = LEFT - 10; p.px = p.x + (p.x - p.px) * .4; } if (p.x > RIGHT + 10) { p.x = RIGHT + 10; p.px = p.x + (p.x - p.px) * .4; }
 }
 function satisfy(a, b, len) { const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .001, k = (d - len) / d * .5; a.x += dx * k; a.y += dy * k; b.x -= dx * k; b.y -= dy * k; }
@@ -76,6 +78,7 @@ function clonePose(P) { const c = {}; for (const k in P) if (P[k] && P[k].x !== 
 
 // Called after every simulation tick that actually moved (not during freeze-frames).
 export function updateFx(S, dt) {
+  const map = getMap(S), {floor, platforms} = map, {left: LEFT, right: RIGHT} = map.walls;
   const live = S.phase !== 'countdown';
   for (let p = 0; p < 2; p++) {
     const f = S.F[p], L = looks[p];
@@ -91,16 +94,16 @@ export function updateFx(S, dt) {
   }
   for (const r of ragdolls) {
     for (const k in r.pts) verletPoint(r.pts[k], dt);
-    for (let it = 0; it < 5; it++) { for (const c of r.cons) satisfy(r.pts[c.a], r.pts[c.b], c.len); for (const k in r.pts) collidePoint(r.pts[k], k === 'head' ? 10 : 2.5); }
+    for (let it = 0; it < 5; it++) { for (const c of r.cons) satisfy(r.pts[c.a], r.pts[c.b], c.len); for (const k in r.pts) collidePoint(r.pts[k], k === 'head' ? 10 : 2.5, map); }
   }
-  for (const s of swords) { verletPoint(s.a, dt); verletPoint(s.b, dt); for (let it = 0; it < 4; it++) { satisfy(s.a, s.b, BLADE); collidePoint(s.a, 2); collidePoint(s.b, 1.5); } }
+  for (const s of swords) { verletPoint(s.a, dt); verletPoint(s.b, dt); for (let it = 0; it < 4; it++) { satisfy(s.a, s.b, BLADE); collidePoint(s.a, 2, map); collidePoint(s.b, 1.5, map); } }
   for (let j = fx.length - 1; j >= 0; j--) {
     const p = fx[j]; p.life -= dt;
     if (p.type === 'spark') { p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
     else if (p.type === 'blood') {
       p.vy += 1600 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-      let hit = p.y >= GROUND; if (hit) p.y = GROUND + 1;
-      for (const pl of PLATFORMS) if (!hit && p.vy > 0 && p.y >= pl.y && p.y < pl.y + 10 && p.x > pl.x && p.x < pl.x + pl.w) { hit = true; p.y = pl.y + 1; }
+      let hit = p.y >= floor; if (hit) p.y = floor + 1;
+      for (const pl of platforms) if (!hit && p.vy > 0 && p.y >= pl.y && p.y < pl.y + 10 && p.x > pl.x && p.x < pl.x + pl.w) { hit = true; p.y = pl.y + 1; }
       // side walls are invisible: drops bounce off them and fall to the floor instead of sticking in mid-air
       if (p.x < LEFT || p.x > RIGHT) { p.x = clamp(p.x, LEFT, RIGHT); p.vx *= -.15; }
       if (hit) { splat(p.x, p.y, p.size); p.life = 0; }

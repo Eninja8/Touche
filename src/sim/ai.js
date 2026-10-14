@@ -2,7 +2,8 @@
 // writes the same input record a human would), and all its "dice rolls" use the
 // seeded generator, so a CPU match replays identically from the same seed.
 
-import {LEFT, RIGHT, ANG_MIN, ANG_MAX} from './constants.js';
+import {ANG_MIN, ANG_MAX} from './constants.js';
+import {getMap} from './maps.js';
 import {clamp} from './util.js';
 import {random, rand} from './rng.js';
 
@@ -53,5 +54,6 @@ function think(S, me, op, i, A, d) {
   if (me.y < op.y - 60 && me.onPlat && random(S) < .3) { A.move = 0; i.buf.down = .1; }
   if (random(S) < .05) { i.buf.up = .1; A.holdUp = rand(S, 0, .3); }
   if (random(S) < .05 && Math.abs(me.vx) > 200) i.buf.down = .1;
-  if ((me.x < LEFT + 50 || me.x > RIGHT - 50) && dist < 150 && random(S) < .5) { i.buf.up = .1; A.holdUp = .3; A.move = toward; }
+  const {left, right} = getMap(S).walls;
+  if ((me.x < left + 50 || me.x > right - 50) && dist < 150 && random(S) < .5) { i.buf.up = .1; A.holdUp = .3; A.move = toward; }
 }

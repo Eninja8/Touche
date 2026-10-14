@@ -66,6 +66,7 @@ function syncSettingsUI() {
   const t = document.querySelector(`input[name="target"][value="${settings.target}"]`); if (t) t.checked = true;
   $('shake').checked = settings.shake; $('gore').checked = settings.blood; renderBinds();
   document.querySelector(`input[name="mouseaim"][value="${settings.mouseAim ? 'on' : 'off'}"]`).checked = true;
+  document.querySelector(`input[name="aimind"][value="${settings.aimIndicator === 'off' ? 'off' : 'arrow'}"]`).checked = true;
   $('sens').value = Math.round(settings.sens * 100); $('sensOut').textContent = settings.sens.toFixed(2);
 }
 function showTab(t) {
@@ -105,6 +106,7 @@ export function initMenus(app) {
   $('gore').addEventListener('change', e => { settings.blood = e.target.checked; saveSettings(); });
   $('bresetKeys').addEventListener('click', () => { settings.binds = JSON.parse(JSON.stringify(DEFAULT_BINDS)); settings.fullscreenKey = null; saveSettings(); renderBinds(); $('bindNote').textContent = 'Controls reset.'; });
   document.querySelectorAll('input[name="mouseaim"]').forEach(r => r.addEventListener('change', () => { settings.mouseAim = r.value === 'on'; saveSettings(); }));
+  document.querySelectorAll('input[name="aimind"]').forEach(r => r.addEventListener('change', () => { settings.aimIndicator = r.value; saveSettings(); }));
   $('sens').addEventListener('input', e => { settings.sens = e.target.value / 100; $('sensOut').textContent = settings.sens.toFixed(2); saveSettings(); });
   $('key-fs').addEventListener('click', () => { rebinding = {fs: true}; renderBinds(); const b = $('key-fs'); b.textContent = 'Press a key…'; b.classList.add('listening'); b.focus(); });
   $('bclearFs').addEventListener('click', () => { settings.fullscreenKey = null; saveSettings(); renderBinds(); });

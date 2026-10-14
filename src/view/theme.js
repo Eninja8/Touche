@@ -10,3 +10,9 @@ function readTheme() {
 readTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
 new MutationObserver(readTheme).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+
+// Is the page in dark mode? (an explicit data-theme wins over the system setting)
+export function isDark() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+}
