@@ -24,7 +24,7 @@ function loadPeerJS() {
   if (window.Peer) return Promise.resolve();
   loading ||= new Promise((res, rej) => {
     const s = document.createElement('script'); s.src = PEERJS_URL;
-    s.onload = res; s.onerror = () => { loading = null; rej(new Error('Could not load the online library.')); };
+    s.onload = res; s.onerror = () => { loading = null; rej(new Error('Online play failed to load.')); };
     document.head.appendChild(s);
   });
   return loading;
@@ -33,11 +33,11 @@ function loadPeerJS() {
 // Plain-language messages for PeerJS errors.
 function explain(err) {
   switch (err && err.type) {
-    case 'peer-unavailable': return 'No match found with that code. Check the code, and that your friend is still hosting.';
+    case 'peer-unavailable': return 'No match with that code.';
     case 'network': case 'server-error': case 'socket-error': case 'socket-closed':
-      return 'Couldn\'t reach the matchmaking server. Check your internet connection and try again.';
-    case 'browser-incompatible': return 'This browser doesn\'t support online play. Try Chrome, Edge or Firefox.';
-    default: return 'Connection problem' + (err && err.type ? ` (${err.type})` : '') + '. Try again.';
+      return 'Can\'t reach the server.';
+    case 'browser-incompatible': return 'Browser not supported.';
+    default: return 'Connection failed' + (err && err.type ? ` (${err.type})` : '') + '.';
   }
 }
 
@@ -99,7 +99,7 @@ export function join(code, h) {
     peer.on('error', e => fail(explain(e)));
     peer.on('open', () => {
       const c = peer.connect(ID_PREFIX + code, {reliable: false, serialization: 'json'});
-      const timer = setTimeout(() => fail('Couldn\'t connect to your friend. One of your networks may be blocking it. Try again, or try another network.'), 15000);
+      const timer = setTimeout(() => fail('Couldn\'t connect. Try another network.'), 15000);
       c.on('open', () => { clearTimeout(timer); if (cancelled || done) return; done = true; h.onConnect(makeLink(c, peer)); });
     });
   }, e => fail(e.message));

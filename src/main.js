@@ -14,7 +14,8 @@ import {createGame, newMatch, step} from './sim/game.js';
 import {drain} from './sim/events.js';
 import {settings} from './ui/settings.js';
 import {initInput, sampleCommands, clearKeys, mousePlayer} from './ui/input.js';
-import {initMenus, hud, setLamp, showGameOver, selectedDifficulty, setPauseHint, setPauseNote, menuEl, pauseEl, overEl, setEl} from './ui/menus.js';
+import {initMenus, hud, setLamp, showGameOver, setPauseHint, setPauseNote, pauseEl, overEl, setEl} from './ui/menus.js';
+import {showScreen, hideScreens} from './ui/screens.js';
 import {cross, resetCross, isLocked, requestLock, releaseLock, onLockChange} from './ui/mouse.js';
 import {unlockAudio, sfx} from './view/audio.js';
 import {C} from './view/theme.js';
@@ -40,26 +41,29 @@ const app = {
   S: createGame(newSeed()),
   paused: false,   // local match frozen
   menuOpen: false, // online: pause menu showing (the match keeps running)
+  lastMatch: null, // {mode, opts} of the last local match, for Rematch
 
-  startMatch(vsCPU) {
+  // A local match. mode: 'cpu' or 'local'; opts: the lobby's {diff, map, target}.
+  startMatch(mode, opts) {
     unlockAudio();
-    app.paused = false; setEl.hidden = true; menuEl.hidden = true; pauseEl.hidden = true; overEl.hidden = true;
+    app.lastMatch = {mode, opts};
+    app.paused = false; hideScreens(); pauseEl.hidden = true; overEl.hidden = true; setEl.hidden = true;
     if (settings.mouseAim) requestLock().catch(() => {});
-    newMatch(app.S, {demo: false, vsCPU, diff: selectedDifficulty(), target: settings.target, seed: newSeed()});
+    newMatch(app.S, {demo: false, vsCPU: mode === 'cpu', diff: opts.diff, target: opts.target, map: opts.map, seed: newSeed()});
     dispatch(drain());
   },
 
   showMenu() {
     online.leave();
     releaseLock(); resumeWanted = false; app.menuOpen = false;
-    for (const id of ['lobby', 'netmsg']) document.getElementById(id).hidden = true;
-    app.paused = false; menuEl.hidden = false; pauseEl.hidden = true; overEl.hidden = true; setEl.hidden = true; ui.cancelRebind();
+    document.getElementById('netmsg').hidden = true;
+    app.paused = false; pauseEl.hidden = true; overEl.hidden = true; ui.cancelRebind();
+    showScreen('menu', 'bplay');
     newMatch(app.S, {demo: true, seed: newSeed()});
     dispatch(drain());
-    document.getElementById('b2p').focus({preventScroll: true});
   },
 
-  rematch() { if (app.S.mode.online) online.requestRematch(); else app.startMatch(app.S.mode.vsCPU); },
+  rematch() { if (app.S.mode.online) online.requestRematch(); else app.startMatch(app.lastMatch.mode, app.lastMatch.opts); },
 
   pause() {
     if (app.paused || app.menuOpen || app.S.phase === 'over' || app.S.mode.demo) return;
@@ -81,7 +85,7 @@ const app = {
     if (!app.paused && !app.menuOpen) return;
     if (mousePlayer(app.S) < 0) { app.paused = app.menuOpen = false; pauseEl.hidden = true; return; }
     resumeWanted = true;
-    requestLock().catch(() => { resumeWanted = false; setPauseNote('Click Resume to grab the mouse. (Right after Esc, the browser may need a second.)'); });
+    requestLock().catch(() => { resumeWanted = false; setPauseNote('Click Resume again.'); });
   },
 };
 

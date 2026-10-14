@@ -1,18 +1,22 @@
 # Touché dev log
 
 ## Current state
+- **Menus:** Main (Play, Settings, corner fullscreen + mute icons) → Play (Online, vs CPU, Local) → a lobby with the match options (remembered per mode) → Start. Online: Host shows a room code and editable options; the joiner sees them read-only; the host presses Start. Keyboard: arrows move, Left/Right change options, Enter picks, Esc goes back.
 - **Playable:** online 1v1 with room codes (rollback netcode over PeerJS), local 2-player (Red on mouse + keyboard, Green on keyboard), vs CPU (easy/normal/hard), menu demo bout, settings with key rebinding, sound, ragdoll deaths. Fixed 120 Hz simulation.
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
 - **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove.
-- **Next:** owner playtests the new point rules and online (two windows side by side, then with a friend). Then more maps.
+- **Next:** owner playtests Phase A (menus). Then Phase B (combat tuning: CPU vs slides, beats), Phase C (maps and hazards), Phase D (power-ups), stopping after each for a playtest.
 
 ## Roadmap
 1. Online 1v1 with room codes (built; being playtested).
-2. More maps (the arena is already map data in `src/sim/maps.js`).
-3. Controller support (Gamepad API).
-4. Windows EXE on Steam with Steam lobbies and friend invites.
+2. Phase A: menus and UI cleanup (built; being playtested).
+3. Phase B: combat tuning (CPU reacts to slides; "beat" the blade away).
+4. Phase C: maps and hazards (Frozen Lake, Rooftops, Dojo, Forge; ring-out; Hazards on/off; speed and jump pads; random map options).
+5. Phase D: power-ups (Swift, Long Blade, Air Dash, Throwing Knife; Power-ups on/off).
+6. Controller support (Gamepad API). Not started.
+7. On hold until online has been tested with a friend: Windows EXE (Steam/Electron) with Steam lobbies and invites, and a relay server.
 
 ## Session log
 
@@ -79,3 +83,15 @@ Owner's request: fencers could walk into each other and the point passed through
 - *Measured* over 20 CPU-vs-CPU bouts (11 minutes of fighting): ticks with a blade visibly inside a body went from 1,638 to 7 (one 3 px moment during a double-thrust clash). Touches per minute are about the same; about three quarters are now point touches.
 - *Tests:* new checks in `npm test`: standing near the point is safe; inching onto it doesn't kill and the point never enters the body; a slow 520 px/s swing down through a body neither kills nor passes through (shoves it 45 px); running onto the point kills (266 px/s). Determinism and all three rollback network tests pass. Browser runs (vs CPU, 2-player) have no errors.
 - Online version bumped to 2, so an old cached copy can't play against the new rules.
+
+### 2026-10-14: Phase A, menus and UI cleanup
+- *Short labels everywhere:* removed the help sentences under the main menu, settings and controls table. Status lines are brief ("Waiting for opponent…", "Copied", "Opponent left."), and so are connection errors ("No match with that code.").
+- *Tagline* options: **"One touch kills."** (in use), "Strike first. Strike once.", "En garde."
+- *How to play* is now five short lines.
+- *New menu structure:* Main (title, tagline, Play, Settings; fullscreen and mute icons in the top-right corner, menus only) → Play (Online, vs CPU, Local, Back) → lobby. The fullscreen buttons in the other menus are gone (the optional fullscreen key still works everywhere). The scoring box is hidden on menu screens.
+- *Lobbies* (`src/ui/lobby.js`): vs CPU has Difficulty, Map, First to; Local and Online have Map and First to. Options are "‹ value ›" selectors (`src/ui/options.js`), remembered per mode in `settings.lobby`. Old saves carry their match length over. Map has one choice (Hall) until Phase C.
+- *Online:* Online → Host or Join. The host's lobby shows the room code, a Copy button and the editable options. The joiner sees the host's options read-only and live (new `lobby` message). The host presses Start once someone has joined, and both games start straight away (the old "both press Fight" step is gone). If the joiner's browser refuses to grab the mouse without a click, the pause menu asks them to click Resume. Online version bumped to 3.
+- *Settings:* Controls (aim with mouse, aim indicator, sensitivity, keys, fullscreen key), Sound (volume, mute), Display (screen shake, blood), How to play. "First to" moved into the lobbies.
+- *Keyboard:* every menu works with arrows (Up/Down move; Left/Right change an option, switch settings tabs or move between buttons), Enter picks, Esc goes back one screen (`src/ui/screens.js`). Typing a room code doesn't trigger game keys (M no longer mutes while typing).
+- The current map is now called "Hall".
+- *Checked:* `npm test` passes. Headless browser walkthrough of every screen by keyboard and mouse, starting a CPU match and pausing, with no errors. Two-window online test: the joiner saw the host change "First to" live, Start began the match on both, scores matched, the rematch worked, and closing one window showed "Opponent left." within 27 ms.

@@ -1,9 +1,10 @@
 // Online 1v1: lobby, match flow and the rollback loop, glued to the UI.
 //
 // How a match runs:
-//  1. Lobby: the host gets a room code; the friend joins with it. The host is
-//     Red (player 0), the friend is Green (player 1). The host picks the random
-//     seed and match length and sends them, so both games start identical.
+//  1. Lobby: the host gets a room code; the opponent joins with it. The host is
+//     Red (player 0), the joiner is Green (player 1). The host's lobby options
+//     are shown to the joiner. When the host presses Start, it picks the random
+//     seed and sends it with the options, so both games start identical.
 //  2. Each round starts with a "ready" handshake, then runs with rollback
 //     (rollback.js): only inputs are sent, both computers simulate everything.
 //  3. When a touch is CONFIRMED (both players' real inputs agree it happened),
@@ -23,9 +24,11 @@ import * as transport from './transport.js';
 import {settings} from '../ui/settings.js';
 import {sampleOnline, setOnlinePlayer, clearKeys} from '../ui/input.js';
 import {requestLock, releaseLock} from '../ui/mouse.js';
+import {showScreen, hideScreens, onBack} from '../ui/screens.js';
+import {openLobby, lobbyValues, setLobbyValues, setLobbyStatus, setLobbyError, setStartEnabled} from '../ui/lobby.js';
 import {onKill, hasRagdoll, undoKill, confirmKills, updateFx} from '../view/fx.js';
 
-const PROTOCOL = 2;          // bump when online play or gameplay changes, so mismatched versions refuse to play
+const PROTOCOL = 3;          // bump when online play or gameplay changes, so mismatched versions refuse to play
 const TIMEOUT_MS = 5000;     // no message for this long = disconnected
 const PING_MS = 500, RESEND_MS = 300, STALL_NOTE_MS = 500;
 const IDLE = [decode(EMPTY), decode(EMPTY)];
@@ -42,7 +45,7 @@ const net = {
   acc: 0, slow: 0, syncWait: 0,
   rtt: 0, lastHeard: 0, lastPing: 0, lastHud: 0, lastResend: 0,
   ctlId: 1, unacked: new Map(), seen: new Set(),
-  stallSince: null, kills: {}, rematch: {me: false, peer: false}, autoReady: false, desync: false,
+  stallSince: null, kills: {}, rematch: {me: false, peer: false}, desync: false,
 };
 
 export const isActive = () => ['connected', 'wait', 'play', 'ko', 'over'].includes(net.phase);
@@ -52,49 +55,54 @@ export const ping = () => net.link ? Math.round(net.rtt) : null;
 
 export function initOnline(h) {
   hooks = h;
-  $('bonline').addEventListener('click', openLobby);
+  $('bonline').addEventListener('click', openOnlineMenu);
   $('bhost').addEventListener('click', hostMatch);
-  $('bjoinOpen').addEventListener('click', () => { showStep('lobbyJoin'); $('joinCode').focus(); });
+  $('bjoinOpen').addEventListener('click', openJoin);
   $('bjoin').addEventListener('click', joinMatch);
-  $('joinCode').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') joinMatch(); });
+  $('joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinMatch(); });
   $('joinCode').addEventListener('input', e => { e.target.value = transport.cleanCode(e.target.value); });
   $('bcopy').addEventListener('click', copyCode);
-  $('bfight').addEventListener('click', pressFight);
-  $('blobbyBack').addEventListener('click', () => { leave(); hooks.app.showMenu(); });
+  const toPlay = () => { leave(); showScreen('play', 'bonline'); };
+  $('bonlineBack').addEventListener('click', toPlay); onBack('onlineMenu', toPlay);
+  $('bjoinBack').addEventListener('click', openOnlineMenu); onBack('joinScreen', openOnlineMenu);
   $('bnetmsgOk').addEventListener('click', () => { $('netmsg').hidden = true; hooks.app.showMenu(); });
-  // closing or reloading the page: tell the friend straight away instead of letting them time out
+  onBack('netmsg', () => { $('netmsg').hidden = true; hooks.app.showMenu(); });
+  // closing or reloading the page: tell the opponent straight away instead of letting them time out
   addEventListener('pagehide', () => { if (net.link) net.link.send(BYE); });
 }
 
 // ---------- lobby ----------
 
-function showStep(id) {
-  for (const s of ['lobbyChoose', 'lobbyHost', 'lobbyJoin', 'lobbyReady']) $(s).hidden = s !== id;
-  $('lobbyError').textContent = '';
+// Online → Host / Join. (Also where Back from a lobby or the join screen lands.)
+function openOnlineMenu() {
+  leave(); net.phase = 'lobby';
+  showScreen('onlineMenu', 'bhost');
 }
 
-function openLobby() {
-  $('menu').hidden = true; $('lobby').hidden = false; net.phase = 'lobby';
-  showStep('lobbyChoose'); $('bhost').focus({preventScroll: true});
+function openJoin() {
+  $('joinStatus').textContent = ''; $('joinError').textContent = '';
+  showScreen('joinScreen', 'joinCode');
 }
 
+// Host: the lobby with the room code and editable match options. Start once someone joins.
 function hostMatch() {
-  showStep('lobbyHost'); $('roomCode').textContent = '····'; $('hostStatus').textContent = 'Getting a code…';
+  openLobby('online', {code: true, onStart: hostStart, onBack: openOnlineMenu, onChange: sendLobby});
+  setStartEnabled(false); setLobbyStatus('Getting code…'); $('bcopy').focus({preventScroll: true});
   net.lobby = transport.host({
-    onCode: code => { $('roomCode').textContent = code; $('hostStatus').textContent = 'Waiting for your friend to join…'; },
+    onCode: code => { $('roomCode').textContent = code; setLobbyStatus('Waiting for opponent…'); },
     onConnect: link => connected(link, 0),
-    onError: msg => { $('lobbyError').textContent = msg; },
+    onError: msg => { setLobbyError(msg); },
   });
 }
 
 function joinMatch() {
   const code = transport.cleanCode($('joinCode').value);
-  if (code.length !== transport.CODE_LENGTH) { $('joinStatus').textContent = `The code has ${transport.CODE_LENGTH} letters.`; return; }
+  if (code.length !== transport.CODE_LENGTH) { $('joinError').textContent = `Codes have ${transport.CODE_LENGTH} letters.`; return; }
   if (net.lobby) net.lobby.cancel();
-  $('joinStatus').textContent = 'Connecting…'; $('lobbyError').textContent = '';
+  $('joinStatus').textContent = 'Connecting…'; $('joinError').textContent = '';
   net.lobby = transport.join(code, {
     onConnect: link => connected(link, 1),
-    onError: msg => { $('joinStatus').textContent = ''; $('lobbyError').textContent = msg; },
+    onError: msg => { $('joinStatus').textContent = ''; $('joinError').textContent = msg; },
   });
 }
 
@@ -103,21 +111,31 @@ function copyCode() {
   navigator.clipboard.writeText(code).then(() => { $('bcopy').textContent = 'Copied'; setTimeout(() => { $('bcopy').textContent = 'Copy'; }, 1500); }, () => {});
 }
 
+const fakeNote = link => link.faked ? ` · fake lag ${link.faked.lag}±${link.faked.jitter} ms, ${Math.round(link.faked.loss * 100)}% loss` : '';
+
 function connected(link, me) {
   net.link = link; net.me = me; net.lobby = null; net.lastHeard = performance.now();
   net.matchNo = 0; net.peerReady = 0; net.unacked.clear(); net.seen.clear(); net.ctlId = 1; net.rtt = 0;
   setOnlinePlayer(me);
   link.onMessage(onMessage);
-  link.onClose(() => disconnected('Your friend left the match.'));
+  link.onClose(() => disconnected('Opponent left.'));
   sendCtl({t: 'hello', v: PROTOCOL});
   net.phase = 'connected';
-  showStep('lobbyReady');
-  $('readyText').textContent = `Connected! You are ${me ? 'Green' : 'Red'}.`;
-  $('readyHint').textContent = 'The match starts when you both press Fight.';
-  if (link.faked) $('readyHint').textContent += ` (Fake lag on: ${link.faked.lag} ms, jitter ${link.faked.jitter} ms, loss ${Math.round(link.faked.loss * 100)}%.)`;
-  $('bfight').disabled = me === 1; // the friend waits until the host's match settings arrive
-  if (me === 0) hostStartsMatch();
-  $('bfight').focus({preventScroll: true});
+  if (me === 0) { setLobbyStatus('Opponent joined' + fakeNote(link)); setStartEnabled(true); sendLobby(lobbyValues()); $('bstart').focus({preventScroll: true}); }
+  else {
+    // the joiner sees the host's options, read-only, until the host presses Start
+    openLobby('online', {readOnly: true, values: {...settings.lobby.online}, onBack: openOnlineMenu});
+    setLobbyStatus('Waiting for host…' + fakeNote(link));
+  }
+}
+
+// Host changed a lobby option: show it to the joiner.
+function sendLobby(v) { if (net.link && net.me === 0 && net.phase === 'connected') sendCtl({t: 'lobby', s: v}); }
+
+function hostStart() {
+  if (net.phase !== 'connected') return;
+  if (settings.mouseAim) requestLock().catch(() => {});
+  hostStartsMatch();
 }
 
 // ---------- match flow ----------
@@ -125,24 +143,18 @@ function connected(link, me) {
 const roundKey = S => net.matchNo * 1000 + S.round; // unique per round, per match
 
 function hostStartsMatch() {
-  const start = {t: 'start', no: net.matchNo + 1, seed: (Math.random() * 4294967296) >>> 0, target: settings.target, map: DEFAULT_MAP};
+  const o = settings.lobby.online;
+  const start = {t: 'start', no: net.matchNo + 1, seed: (Math.random() * 4294967296) >>> 0, target: o.target, map: o.map || DEFAULT_MAP};
   sendCtl(start); beginMatch(start);
 }
 
+// Both computers set up the identical match, then meet with a ready handshake.
 function beginMatch(c) {
   const S = hooks.app.S;
   net.matchNo = c.no; net.rematch = {me: false, peer: false}; net.kills = {}; net.desync = false;
   newMatch(S, {online: true, seed: c.seed, target: c.target, map: c.map});
   hooks.dispatch(drain());
-  $('over').hidden = true; $('bfight').disabled = false;
-  if (net.autoReady) { net.autoReady = false; sendReady(); }
-  else { net.phase = 'connected'; }
-}
-
-function pressFight() {
-  if (net.phase !== 'connected') return;
-  if (settings.mouseAim) requestLock().catch(() => {});
-  $('bfight').disabled = true; $('readyHint').textContent = 'Waiting for your friend to press Fight…';
+  $('over').hidden = true; setStartEnabled(false); setLobbyStatus('Starting…');
   sendReady();
 }
 
@@ -160,7 +172,7 @@ function tryStartRound() {
   for (const p of net.early) if (p.r === key) net.session.receivePacket(p);
   net.early = []; net.kills = {}; net.acc = 0; net.stallSince = null; net.lastPacket = null;
   net.phase = 'play';
-  $('lobby').hidden = true; $('over').hidden = true;
+  hideScreens(); $('over').hidden = true;
   clearKeys(); drain();
   setBanner(null);
 }
@@ -191,10 +203,10 @@ function reconcileKills(events) {
 
 function requestRematch() {
   if (net.phase !== 'over' || net.rematch.me) return;
-  net.rematch.me = true; net.autoReady = true;
+  net.rematch.me = true;
   if (settings.mouseAim) requestLock().catch(() => {});
   sendCtl({t: 'rematch'});
-  $('overHint').textContent = net.rematch.peer ? 'Starting…' : 'Waiting for your friend to agree…';
+  $('overHint').textContent = net.rematch.peer ? 'Starting…' : 'Waiting for opponent…';
   if (net.me === 0 && net.rematch.peer) hostStartsMatch();
 }
 export {requestRematch};
@@ -229,12 +241,12 @@ function tickPlay(now) {
   if (s.desyncAt !== null && !net.desync) {
     net.desync = true;
     console.error(`[Touché] Desync: the two games disagreed at frame ${s.desyncAt} of round ${S.round}.`);
-    setBanner('Desync detected: the two games disagree. Please tell the developer.', true);
+    setBanner('Desync detected. Please report this.', true);
   }
   if (ko !== null) { enterKO(ko); return; }
   if (!s.canAdvance()) {
     net.stallSince ??= now;
-    if (now - net.stallSince > STALL_NOTE_MS && !net.desync) setBanner('Waiting for your friend…');
+    if (now - net.stallSince > STALL_NOTE_MS && !net.desync) setBanner('Waiting for opponent…');
     net.link.send(s.makePacket());
     return;
   }
@@ -254,7 +266,7 @@ function tickLocal() {
   if (moved) updateFx(S, DT);
   if (net.phase === 'ko') {
     if (S.phase === 'countdown') sendReady();             // next round is set up: meet the opponent
-    else if (S.phase === 'over') { net.phase = 'over'; $('overHint').textContent = 'A rematch starts when you both pick Rematch.'; }
+    else if (S.phase === 'over') { net.phase = 'over'; $('overHint').textContent = ''; }
   }
 }
 
@@ -281,19 +293,22 @@ function onMessage(m) {
 function handleCtl(c) {
   switch (c.t) {
     case 'hello':
-      if (c.v !== PROTOCOL) disconnected('Your friend is running a different version of Touché. Both of you refresh the page, then try again.');
+      if (c.v !== PROTOCOL) disconnected('Different game version. Both refresh the page.');
       return;
-    case 'start': if (net.me === 1) beginMatch(c); return;
+    case 'start':
+      if (net.me !== 1) return;
+      if (settings.mouseAim) requestLock().catch(() => {}); // may need a click (Resume) if the browser refuses
+      beginMatch(c); return;
+    case 'lobby': if (net.me === 1) setLobbyValues(c.s); return;
     case 'ready':
       net.peerReady = Math.max(net.peerReady, c.k);
-      if (net.phase === 'connected') $('readyHint').textContent = 'Your friend is ready. Press Fight!';
       tryStartRound(); return;
     case 'rematch':
       net.rematch.peer = true;
-      if (net.phase === 'over' && !net.rematch.me) $('overHint').textContent = 'Your friend wants a rematch!';
+      if (net.phase === 'over' && !net.rematch.me) $('overHint').textContent = 'Opponent wants a rematch';
       if (net.me === 0 && net.rematch.me) hostStartsMatch();
       return;
-    case 'bye': disconnected('Your friend left the match.'); return;
+    case 'bye': disconnected('Opponent left.'); return;
   }
 }
 
@@ -313,7 +328,7 @@ function pump(now) {
     if (net.lastPacket && (net.phase === 'ko' || net.phase === 'wait')) net.link.send(net.lastPacket);
   }
   if (now - net.lastPing > PING_MS) { net.lastPing = now; net.link.send({t: 'ping', ts: now}); }
-  if (now - net.lastHeard > TIMEOUT_MS) { disconnected('Lost the connection to your friend.'); return; }
+  if (now - net.lastHeard > TIMEOUT_MS) { disconnected('Connection lost.'); return; }
   if (now - net.lastHud > 1000) { net.lastHud = now; hooks.hud(); }
 }
 
@@ -322,7 +337,7 @@ function pump(now) {
 function reset() {
   if (net.lobby) net.lobby.cancel();
   if (net.link) net.link.close();
-  Object.assign(net, {phase: 'off', lobby: null, link: null, session: null, early: [], lastPacket: null, stallSince: null, kills: {}, autoReady: false});
+  Object.assign(net, {phase: 'off', lobby: null, link: null, session: null, early: [], lastPacket: null, stallSince: null, kills: {}});
   net.unacked.clear(); net.seen.clear();
   setOnlinePlayer(-1); setBanner(null);
 }
@@ -331,13 +346,12 @@ function reset() {
 export function leave() {
   if (net.link) { try { net.link.send(BYE); } catch (e) {} }
   reset();
-  $('lobby').hidden = true;
 }
 
 function disconnected(msg) {
   if (net.phase === 'off') return;
   reset(); releaseLock();
-  for (const id of ['lobby', 'over', 'pause', 'settings', 'menu']) $(id).hidden = true;
+  hideScreens(); for (const id of ['over', 'pause', 'settings']) $(id).hidden = true;
   $('netmsgTitle').textContent = 'Match over'; $('netmsgText').textContent = msg; $('netmsg').hidden = false;
   $('bnetmsgOk').focus({preventScroll: true});
 }

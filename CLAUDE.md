@@ -4,8 +4,9 @@
 
 ## Goals, in order
 1. Shareable on the web so friends can play. **Done.**
-2. Online 1v1 with room codes (peer-to-peer WebRTC plus rollback netcode). Plan is in DEVLOG.md and waits for the owner's OK.
-3. Windows EXE on Steam with Steam lobbies and friend invites.
+2. Online 1v1 with room codes (peer-to-peer WebRTC plus rollback netcode). **Built**, being playtested.
+3. Gameplay and polish in phases A–D (menus, combat tuning, maps and hazards, power-ups). The owner playtests after each phase; see the DEVLOG roadmap.
+4. Windows EXE on Steam with Steam lobbies and friend invites. On hold until online is tested with a friend.
 
 ## The owner
 New to coding; Claude does most of the work. Explain things in plain language, avoid unexplained jargon, and say what each change means for the game. Give exact commands to run.

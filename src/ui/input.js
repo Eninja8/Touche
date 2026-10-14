@@ -10,6 +10,7 @@ import {settings} from './settings.js';
 import {unlockAudio, toggleMute} from '../view/audio.js';
 import {cross, isLocked, requestLock, lostRecently} from './mouse.js';
 import {toggleFullscreen} from './menus.js';
+import {menuKey} from './screens.js';
 
 const keys = new Set();                // physical keys currently held down
 const presses = [new Set(), new Set()]; // taps waiting for the next tick, per key layout (0 = Red keys + mouse, 1 = Green keys)
@@ -67,7 +68,8 @@ export function initInput(app, ui) {
     const S = app.S;
     if (ui.isRebinding()) { e.preventDefault(); if (!e.repeat) ui.finishRebind(e.code); return; }
     if (settings.fullscreenKey && e.code === settings.fullscreenKey) { if (!e.repeat) toggleFullscreen(); e.preventDefault(); return; }
-    if (ui.settingsOpen()) { if (e.code === 'Escape' && !e.repeat) ui.closeSettings(); return; }
+    if (menuKey(e)) return; // arrows, Esc (back) and typing in menus
+    if (ui.settingsOpen()) return;
     const playing = !S.mode.demo && !app.paused;
     const bound = Object.values(settings.binds[0]).includes(e.code) || Object.values(settings.binds[1]).includes(e.code);
     if (playing && (GAME_CODES.has(e.code) || bound)) e.preventDefault();
@@ -80,7 +82,7 @@ export function initInput(app, ui) {
       if (app.paused || app.menuOpen) app.resume(); else app.pause();
       return;
     }
-    if (e.code === 'Enter' && S.phase === 'over' && !S.mode.demo && !S.mode.online) { e.preventDefault(); app.startMatch(S.mode.vsCPU); return; }
+    if (e.code === 'Enter' && S.phase === 'over' && !S.mode.demo && !S.mode.online) { e.preventDefault(); app.rematch(); return; }
     keys.add(e.code);
     for (const p of activeLayouts(S)) {
       const b = bind(S, p);

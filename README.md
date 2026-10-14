@@ -18,7 +18,7 @@ Then open http://localhost:8080 in your browser. Press Ctrl+C in the terminal to
 
 ## Play online
 
-Click **Play online**, then **Host a match** and send the 4-letter code to a friend. They click **Play online**, then **Join a match**, and type it in. To try it alone, open the game in **two separate browser windows** side by side (not two tabs: browsers pause games in background tabs). Add `?lag=100&jitter=20&loss=5` to the address to fake a bad connection.
+Click **Play → Online → Host** and send the 4-letter code to a friend. They click **Play → Online → Join** and type it in. You pick the match options; press **Start** once they have joined. To try it alone, open the game in **two separate browser windows** side by side (not two tabs: browsers pause games in background tabs). Add `?lag=100&jitter=20&loss=5` to the address to fake a bad connection.
 
 ## Test
 
@@ -37,7 +37,7 @@ This checks that the simulation is deterministic (the same inputs always produce
 | `src/main.js` | Starts everything and runs the main loop |
 | `src/sim/` | **The simulation**: rules, physics, combat, CPU. Pure and deterministic |
 | `src/view/` | Drawing, sound and cosmetic effects (particles, ragdolls, blood) |
-| `src/ui/` | Keyboard/mouse input, pointer lock, menus, settings |
+| `src/ui/` | Keyboard/mouse input, pointer lock, menu screens, lobbies, settings |
 | `src/net/` | Online play: rollback netcode, PeerJS connection, lobby and match flow |
 | `src/vendor/` | PeerJS 1.5.5 (MIT licence), the only outside library |
 | `tools/` | Local server and the determinism test |

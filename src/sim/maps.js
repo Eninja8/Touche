@@ -14,7 +14,7 @@
 
 export const MAPS = {
   hall: {
-    name: 'Fencing hall',
+    name: 'Hall',
     width: 960, height: 540, floor: 462,
     walls: {left: 18, right: 942},
     platforms: [{x: 110, y: 350, w: 180}, {x: 670, y: 350, w: 180}, {x: 390, y: 252, w: 180}],

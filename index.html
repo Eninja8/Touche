@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Touché</title>
-<meta name="description" content="Stick-figure fencing. One clean touch ends the bout.">
+<meta name="description" content="Stick-figure fencing. One touch kills.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Barlow:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
@@ -13,82 +13,87 @@
      by a local web server (see README.md), not opened by double-clicking. -->
 <script type="module" src="src/main.js"></script>
 </head>
-<body>
+<body class="menus">
 <main class="wrap">
   <div class="stage" id="stage">
     <canvas id="cv" aria-label="Fencing arena"></canvas>
 
     <header class="box" aria-label="Scoring box">
       <div class="side p1"><span class="lamp" id="lamp1"></span><div><div class="who" id="n1">Red</div><div class="score" id="s1">0</div></div></div>
-      <div class="mid"><div class="brand">Touch<span class="acc">é</span></div><div class="sub" id="status">First to 5 · one touch kills</div></div>
+      <div class="mid"><div class="brand">Touch<span class="acc">é</span></div><div class="sub" id="status">First to 5</div></div>
       <div class="side p2"><span class="lamp" id="lamp2"></span><div><div class="who" id="n2">Green</div><div class="score" id="s2">0</div></div></div>
     </header>
 
+    <!-- Menu screens (src/ui/screens.js). Arrows move, Enter picks, Esc goes back. -->
     <div class="overlay" id="menu">
       <div class="panel">
         <h1 class="title">Touch<span class="acc">é</span></h1>
-        <p class="tag">Stick-figure fencing. One clean touch ends the bout, so keep moving.</p>
-        <div class="btns">
-          <button class="btn" id="b2p" type="button">Duel a friend</button>
-          <button class="btn ghost" id="bcpu" type="button">Duel the CPU</button>
-          <button class="btn ghost" id="bonline" type="button">Play online</button>
+        <p class="tag">One touch kills.</p>
+        <div class="btns col">
+          <button class="btn" id="bplay" type="button">Play</button>
           <button class="btn ghost" id="bset1" type="button">Settings</button>
-          <button class="btn ghost fsbtn" data-fs type="button">Fullscreen</button>
         </div>
-        <div class="seg" role="radiogroup" aria-label="CPU difficulty">
-          <label><input type="radio" name="diff" id="d-easy" value="easy"><span>Easy</span></label>
-          <label><input type="radio" name="diff" id="d-normal" value="normal" checked><span>Normal</span></label>
-          <label><input type="radio" name="diff" id="d-hard" value="hard"><span>Hard</span></label>
+        <p class="touch-note">Keyboard and mouse required.</p>
+      </div>
+    </div>
+    <div class="overlay" id="play" hidden>
+      <div class="panel">
+        <p class="big sm">Play</p>
+        <div class="btns col">
+          <button class="btn" id="bonline" type="button">Online</button>
+          <button class="btn ghost" id="bcpu" type="button">vs CPU</button>
+          <button class="btn ghost" id="blocal" type="button">Local</button>
+          <button class="btn ghost small" id="bplayBack" type="button">Back</button>
         </div>
-        <p class="hint">Red aims with the mouse (click to thrust, right-click to dash) and moves with WASD. Green uses the keyboard. Mouse aiming can be turned off in Settings.</p>
-        <p class="touch-note">Touché needs a keyboard and mouse. Open this page on a computer to play.</p>
+      </div>
+    </div>
+    <div class="overlay" id="onlineMenu" hidden>
+      <div class="panel">
+        <p class="big sm">Online</p>
+        <div class="btns col">
+          <button class="btn" id="bhost" type="button">Host</button>
+          <button class="btn ghost" id="bjoinOpen" type="button">Join</button>
+          <button class="btn ghost small" id="bonlineBack" type="button">Back</button>
+        </div>
+      </div>
+    </div>
+    <div class="overlay" id="joinScreen" hidden>
+      <div class="panel">
+        <p class="big sm">Join</p>
+        <div class="code-row"><input id="joinCode" class="code-input" type="text" maxlength="4" autocomplete="off" spellcheck="false" aria-label="Room code" placeholder="CODE"><button class="btn" id="bjoin" type="button">Join</button></div>
+        <p class="hint" id="joinStatus" aria-live="polite"></p>
+        <p class="note" id="joinError" aria-live="polite"></p>
+        <div class="btns"><button class="btn ghost small" id="bjoinBack" type="button">Back</button></div>
       </div>
     </div>
     <div class="overlay" id="lobby" hidden>
       <div class="panel">
-        <p class="big sm">Online duel</p>
-        <div class="panel-part" id="lobbyChoose">
-          <div class="btns">
-            <button class="btn" id="bhost" type="button">Host a match</button>
-            <button class="btn ghost" id="bjoinOpen" type="button">Join a match</button>
-          </div>
-          <p class="hint">Hosting gives you a short code to send to a friend. Your friend picks Join and types it in.</p>
-        </div>
-        <div class="panel-part" id="lobbyHost" hidden>
-          <p class="tag">Send this code to your friend:</p>
-          <div class="code-row"><span class="room-code" id="roomCode">····</span><button class="btn small" id="bcopy" type="button">Copy</button></div>
-          <p class="hint" id="hostStatus">Getting a code…</p>
-        </div>
-        <div class="panel-part" id="lobbyJoin" hidden>
-          <label class="tag" for="joinCode">Type your friend's code:</label>
-          <div class="code-row"><input id="joinCode" class="code-input" maxlength="4" autocomplete="off" spellcheck="false" aria-label="Room code"><button class="btn" id="bjoin" type="button">Join</button></div>
-          <p class="hint" id="joinStatus"></p>
-        </div>
-        <div class="panel-part" id="lobbyReady" hidden>
-          <p class="tag" id="readyText">Connected!</p>
-          <div class="btns"><button class="btn" id="bfight" type="button">Fight!</button></div>
-          <p class="hint" id="readyHint">The match starts when you both press Fight.</p>
-        </div>
+        <p class="big sm" id="lobbyTitle">vs CPU</p>
+        <div class="code-row" id="codeRow" hidden><span class="room-code" id="roomCode">····</span><button class="btn small ghost" id="bcopy" type="button">Copy</button></div>
+        <div class="opts" id="lobbyOpts"></div>
+        <p class="hint" id="lobbyStatus" aria-live="polite"></p>
         <p class="note" id="lobbyError" aria-live="polite"></p>
-        <div class="btns"><button class="btn ghost small" id="blobbyBack" type="button">Back</button></div>
+        <div class="btns col">
+          <button class="btn" id="bstart" type="button">Start</button>
+          <button class="btn ghost small" id="blobbyBack" type="button">Back</button>
+        </div>
       </div>
     </div>
     <div class="overlay" id="netmsg" hidden>
       <div class="panel">
-        <p class="big sm" id="netmsgTitle">Disconnected</p>
+        <p class="big sm" id="netmsgTitle">Match over</p>
         <p class="tag" id="netmsgText"></p>
-        <div class="btns"><button class="btn" id="bnetmsgOk" type="button">Back to menu</button></div>
+        <div class="btns"><button class="btn" id="bnetmsgOk" type="button">Menu</button></div>
       </div>
     </div>
     <div class="banner" id="netBanner" hidden></div>
     <div class="overlay" id="pause" hidden>
       <div class="panel">
         <p class="big">Halte</p>
-        <div class="btns">
+        <div class="btns col">
           <button class="btn" id="bresume" type="button">Resume</button>
           <button class="btn ghost" id="bset2" type="button">Settings</button>
-          <button class="btn ghost fsbtn" data-fs type="button">Fullscreen</button>
-          <button class="btn ghost" id="bquit" type="button">Quit to menu</button>
+          <button class="btn ghost" id="bquit" type="button">Quit</button>
         </div>
         <p class="hint" id="pauseHint">Esc to resume</p>
         <p class="note" id="pauseNote" aria-live="polite"></p>
@@ -98,72 +103,59 @@
       <div class="panel">
         <p class="big" id="winText">Red wins</p>
         <p class="tag" id="winScore">5 – 3</p>
-        <div class="btns">
+        <div class="btns col">
           <button class="btn" id="brematch" type="button">Rematch</button>
           <button class="btn ghost" id="bmenu" type="button">Menu</button>
         </div>
-        <p class="hint" id="overHint">Enter for rematch · Esc for menu</p>
+        <p class="hint" id="overHint"></p>
       </div>
     </div>
     <div class="overlay" id="settings" hidden>
       <div class="panel wide" role="dialog" aria-labelledby="setTitle">
-        <div class="set-head"><p class="big sm" id="setTitle">Settings</p>
-          <div class="btns"><button class="btn ghost small fsbtn" data-fs type="button">Fullscreen</button><button class="btn small" id="bclose" type="button">Done</button></div></div>
+        <div class="set-head"><p class="big sm" id="setTitle">Settings</p><button class="btn small" id="bclose" type="button">Done</button></div>
         <div class="tabs" role="tablist">
           <button type="button" role="tab" data-tab="controls" id="t-controls">Controls</button>
           <button type="button" role="tab" data-tab="sound" id="t-sound">Sound</button>
-          <button type="button" role="tab" data-tab="game" id="t-game">Game</button>
+          <button type="button" role="tab" data-tab="display" id="t-display">Display</button>
           <button type="button" role="tab" data-tab="how" id="t-how">How to play</button>
         </div>
         <section class="pane" data-pane="controls">
-          <div class="row"><span class="lbl">Aim with mouse</span>
-            <div class="seg" role="radiogroup" aria-label="Aim with mouse">
-              <label><input type="radio" name="mouseaim" value="on"><span>Red uses mouse</span></label>
-              <label><input type="radio" name="mouseaim" value="off"><span>Off</span></label>
-            </div>
-          </div>
-          <div class="row"><span class="lbl">Aim indicator</span>
-            <div class="seg" role="radiogroup" aria-label="Aim indicator">
-              <label><input type="radio" name="aimind" value="arrow"><span>Arrow</span></label>
-              <label><input type="radio" name="aimind" value="off"><span>Off</span></label>
-            </div>
-          </div>
-          <label class="row" for="sens"><span class="lbl">Mouse sensitivity</span><input type="range" id="sens" min="20" max="400" step="5"><output id="sensOut" for="sens">1.00</output></label>
-          <p class="hint">Mouse on: against the CPU you are Red; with a friend, Red aims with the mouse and Green uses the keyboard. Online, each player uses their own mouse. Off: everyone uses keys to raise and lower the blade.</p>
+          <div class="opts" id="optsControls"></div>
+          <label class="row" for="sens"><span class="lbl">Sensitivity</span><input type="range" id="sens" min="20" max="400" step="5"><output id="sensOut" for="sens">1.00</output></label>
           <div class="tablewrap"><table class="binds"><thead><tr><th>Action</th><th class="p1">Red</th><th class="p2">Green</th></tr></thead><tbody id="bindRows"></tbody></table></div>
-          <div class="row"><span class="lbl">Fullscreen key</span><button type="button" class="key" id="key-fs">Not set</button><button class="btn ghost small" id="bclearFs" type="button">Clear</button></div>
-          <p class="hint">Click a key, then press the new one. Esc cancels. Against the CPU, Red can also use the arrow keys, Space and Left Shift.</p>
+          <div class="row"><span class="lbl">Fullscreen key</span><button type="button" class="key" id="key-fs">None</button><button class="btn ghost small" id="bclearFs" type="button">Clear</button></div>
           <p class="note" id="bindNote" aria-live="polite"></p>
           <button class="btn ghost small" id="bresetKeys" type="button">Reset to defaults</button>
         </section>
         <section class="pane" data-pane="sound" hidden>
           <label class="row" for="vol"><span class="lbl">Volume</span><input type="range" id="vol" min="0" max="100" step="1"><output id="volOut" for="vol">80</output></label>
-          <label class="row check" for="mute"><input type="checkbox" id="mute"><span>Mute (M)</span></label>
+          <div class="opts" id="optsSound"></div>
         </section>
-        <section class="pane" data-pane="game" hidden>
-          <div class="row"><span class="lbl">First to</span>
-            <div class="seg" role="radiogroup" aria-label="Touches to win">
-              <label><input type="radio" name="target" id="tg3" value="3"><span>3</span></label>
-              <label><input type="radio" name="target" id="tg5" value="5"><span>5</span></label>
-              <label><input type="radio" name="target" id="tg7" value="7"><span>7</span></label>
-              <label><input type="radio" name="target" id="tg10" value="10"><span>10</span></label>
-            </div>
-          </div>
-          <p class="hint">Applies from the next match.</p>
-          <label class="row check" for="shake"><input type="checkbox" id="shake"><span>Screen shake</span></label>
-          <label class="row check" for="gore"><input type="checkbox" id="gore"><span>Blood (off shows sparks instead)</span></label>
+        <section class="pane" data-pane="display" hidden>
+          <div class="opts" id="optsDisplay"></div>
         </section>
         <section class="pane how" data-pane="how" hidden>
           <ul>
-            <li><strong>One touch kills.</strong> A thrust's point is always lethal. So is any blade moving fast enough: flick it, dash with it, drop on someone.</li>
-            <li><strong>Mouse aiming.</strong> Your blade follows the crosshair. Move the crosshair behind you to turn around; whip it across your body to swing the blade over the top.</li>
-            <li><strong>Blades clash.</strong> Meet a thrust with your blade to parry it and stun the attacker for a free riposte.</li>
-            <li><strong>Coup double.</strong> Touch each other at the same instant and nobody scores.</li>
-            <li><strong>Move a lot.</strong> Jump twice, kick off walls, slide under a high blade while running, dash, or backstep by dashing with no direction held.</li>
-            <li>Esc pauses (and frees the mouse). M mutes.</li>
+            <li><strong>One touch kills.</strong></li>
+            <li>Thrusts, fast swings and running onto a point all kill.</li>
+            <li>Meet a thrust with your blade to parry.</li>
+            <li>Double jump, wall jump, dash, slide.</li>
+            <li>Esc pauses · M mutes</li>
           </ul>
         </section>
       </div>
+    </div>
+
+    <!-- Corner icons, shown on menu screens only -->
+    <div class="corner">
+      <button class="icon" id="bfs" type="button" aria-label="Fullscreen" title="Fullscreen">
+        <svg class="i-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        <svg class="i-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+      </button>
+      <button class="icon" id="bmute" type="button" aria-label="Mute" title="Mute (M)">
+        <svg class="i-sound" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <svg class="i-muted" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+      </button>
     </div>
   </div>
 </main>
