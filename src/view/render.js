@@ -7,6 +7,7 @@ import {getMap} from '../sim/maps.js';
 import {settings} from '../ui/settings.js';
 import {C, isDark} from './theme.js';
 import {fx, ragdolls, swords, looks, view, decals} from './fx.js';
+import {drawMap} from './backdrops.js';
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d'), stage = document.getElementById('stage');
 function resize() {
@@ -27,20 +28,15 @@ function fit(map) {
 
 function line(pts, w) { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y); ctx.stroke(); }
 
-// Background: sky gradient, floor, platforms, and dimmed space past the map's edges.
-function drawMap(map) {
-  const col = map.colors[isDark() ? 'dark' : 'light'], W = map.width, F = map.floor;
-  const x0 = vis.x0 - 30, w = vis.x1 - vis.x0 + 60;
-  const g = ctx.createLinearGradient(0, 0, 0, F); g.addColorStop(0, col.sky); g.addColorStop(1, col.skyLow);
-  ctx.fillStyle = g; ctx.fillRect(x0, vis.y0 - 30, w, F - vis.y0 + 30);
-  ctx.fillStyle = col.floor; ctx.fillRect(x0, F, w, vis.y1 - F + 30);
-  ctx.fillStyle = col.line; ctx.globalAlpha = .05;
-  if (vis.x0 < 0) ctx.fillRect(x0, vis.y0 - 30, -x0, vis.y1 - vis.y0 + 60);
-  if (vis.x1 > W) ctx.fillRect(W, vis.y0 - 30, vis.x1 - W + 30, vis.y1 - vis.y0 + 60);
-  ctx.globalAlpha = .18; ctx.strokeStyle = col.line; ctx.lineWidth = 2; ctx.lineCap = 'butt';
-  for (const x of [0, W]) if ((x === 0 && vis.x0 < 0) || (x === W && vis.x1 > W)) { ctx.beginPath(); ctx.moveTo(x, vis.y0 - 30); ctx.lineTo(x, F); ctx.stroke(); }
-  ctx.globalAlpha = 1; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x0, F); ctx.lineTo(x0 + w, F); ctx.stroke();
-  for (const p of map.platforms) { ctx.fillStyle = col.platform; ctx.beginPath(); ctx.roundRect(p.x, p.y, p.w, 9, 3); ctx.fill(); ctx.strokeStyle = col.line; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.w, p.y); ctx.stroke(); }
+// The map itself (backdrop, floor, platforms, pads...) is painted by backdrops.js.
+
+// The map's name, shown briefly at the start of a round, just under the scoring box.
+function drawMapLabel(map) {
+  const l = view.mapLabel; if (!l) return;
+  const a = l.t < .2 ? l.t / .2 : l.t > 1.3 ? Math.max(0, 1 - (l.t - 1.3) / .4) : 1;
+  ctx.save(); ctx.globalAlpha = a; ctx.font = '700 24px "Big Shoulders Display", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 6; ctx.strokeStyle = C.hall; ctx.lineJoin = 'round'; const s = l.text.toUpperCase().split('').join(String.fromCharCode(8202));
+  ctx.strokeText(s, map.width / 2, 104); ctx.fillStyle = C.ink; ctx.fillText(s, map.width / 2, 104); ctx.restore();
 }
 
 function drawBlade(P, col, hot) {
@@ -142,9 +138,9 @@ export function render(S, aim) {
   ctx.setTransform(scale, 0, 0, scale, ox, oy);
   const sk = settings.shake ? view.shake : 0, sx = sk ? (Math.random() * 2 - 1) * sk : 0, sy = sk ? (Math.random() * 2 - 1) * sk : 0;
   ctx.save(); ctx.translate(sx, sy);
-  drawMap(map); ctx.drawImage(decals, 0, 0, map.width, map.height);
+  drawMap(ctx, map, vis, isDark(), performance.now() / 1000); ctx.drawImage(decals, 0, 0, map.width, map.height);
   for (const r of ragdolls) drawRagdoll(r);
   for (const s of swords) drawSword(s);
   for (let p = 0; p < 2; p++) drawFighter(S.F[p], looks[p]);
-  drawFx(); if (aim && settings.aimIndicator === 'arrow') drawAimArrow(S, aim); ctx.restore(); drawCallout(map);
+  drawFx(); if (aim && settings.aimIndicator === 'arrow') drawAimArrow(S, aim); ctx.restore(); drawCallout(map); drawMapLabel(map);
 }

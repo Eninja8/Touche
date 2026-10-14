@@ -2,8 +2,9 @@
 // writes the same input record a human would), and all its "dice rolls" use the
 // seeded generator, so a CPU match replays identically from the same seed.
 
-import {ANG_MIN, ANG_MAX, BEAT_SPEED} from './constants.js';
+import {ANG_MIN, ANG_MAX, BEAT_SPEED, GROUND_FRIC} from './constants.js';
 import {getMap} from './maps.js';
+import {groundAt} from './terrain.js';
 import {clamp} from './util.js';
 import {random, rand} from './rng.js';
 
@@ -38,6 +39,35 @@ export function aiStep(S, p, dt) {
   if (A.t <= 0) { A.t = d.react * rand(S, .6, 1.4); think(S, me, op, i, A, d); }
   const da = A.targetAng - me.angle; i.raise = da > .05; i.lower = da < -.05;
   i.left = A.move < 0; i.right = A.move > 0; i.down = A.crouch; i.up = A.holdUp > 0;
+  edgeGuard(getMap(S), me, i, A);
+}
+
+// Stay in the arena: on open-ended maps don't run, dash or slide past the end, brake
+// early on ice, and jump across floor gaps.
+function edgeGuard(map, me, i, A) {
+  const ahead = (i.right ? 1 : 0) - (i.left ? 1 : 0);
+  if (map.ends !== 'walls') {
+    const room = d => d > 0 ? map.walls.right - me.x : me.x - map.walls.left; // distance to the end that way
+    const decel = GROUND_FRIC * (map.grip || 1), v = me.vx, out = Math.sign(v);
+    // moving toward an end faster than we could stop: push the other way
+    if (out && v * v / (2 * decel) + 30 > room(out)) { i.left = out > 0; i.right = out < 0; }
+    else if (ahead && room(ahead) < 40) { i.left = i.right = false; }
+    if (i.buf.dash > 0 && room(ahead || -me.face) < 170) i.buf.dash = 0;
+    if (i.buf.down > 0 && Math.abs(v) > 170 && room(out) < 220) i.buf.down = 0; // no sliding off the end
+  }
+  // over a gap and falling: keep heading for the roof ahead, double jump, or wall-jump back out
+  if (map.floors && !me.onGround && me.vy > 0 && !groundAt(map, me.x)) {
+    const d = Math.sign(me.vx) || me.face; i.left = d < 0; i.right = d > 0;
+    if (me.wallT > 0 || (me.airJump && me.y > map.floor - 30)) { i.buf.up = .1; A.holdUp = .3; i.up = true; }
+  }
+  if (map.floors && me.onGround && ahead) {
+    const edge = map.floors.find(s => me.x >= s.x && me.x <= s.x + s.w); // the roof we stand on
+    if (edge) {
+      const toEdge = ahead > 0 ? edge.x + edge.w - me.x : me.x - edge.x;
+      const more = map.floors.some(s => ahead > 0 ? s.x > edge.x + edge.w : s.x + s.w < edge.x); // another roof beyond the gap
+      if (toEdge < 22 + Math.abs(me.vx) * .05) { if (more) { i.buf.up = .1; A.holdUp = .3; i.up = true; } else { i.left = i.right = false; } }
+    }
+  }
 }
 
 // Incoming slide: notice it (maybe), then after a short delay answer it:

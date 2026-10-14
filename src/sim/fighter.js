@@ -8,11 +8,12 @@ import {
 } from './constants.js';
 import {clamp, lerp, ik} from './util.js';
 import {emit} from './events.js';
+import {collide, SPEED_MULT} from './terrain.js';
 
 export function mkFighter(id, x, y, face) {
   return {
     id, x, y, vx: 0, vy: 0, face, onGround: true, onPlat: false, crouch: false,
-    slideT: 0, dashT: 0, dashCD: 0, airDash: true, airJump: true, wallSide: 0, wallT: 0, coyote: 0, dropT: 0,
+    slideT: 0, dashT: 0, dashCD: 0, airDash: true, airJump: true, wallSide: 0, wallT: 0, coyote: 0, dropT: 0, speedT: 0, padUp: false,
     angle: .18, deflect: 0, lunge: null, lungeCD: 0, stunT: 0, noLethal: 0, beatT: 0, beatCD: 0, swingLock: false, alive: true, phase: 0,
     P: null, prevHand: null, prevTip: null, tipSpeed: 0, swingSpeed: 0, swingRate: 0, prevAng: null, angSpd: 5.2,
   };
@@ -101,11 +102,10 @@ const sfx = name => emit('sfx', {name});
 
 // Advance fighter f by one tick. i = its input, o = the opponent, map = the arena.
 export function updateFighter(f, i, o, dt, map) {
-  const {floor, platforms} = map, {left, right} = map.walls;
   if (!f.alive) return;
-  const prevY = f.y;
+  const prevX = f.x, prevY = f.y, grip = map.grip || 1;
   f.dashCD = Math.max(0, f.dashCD - dt); f.lungeCD = Math.max(0, f.lungeCD - dt); f.noLethal = Math.max(0, f.noLethal - dt); f.beatT = Math.max(0, f.beatT - dt); f.beatCD = Math.max(0, f.beatCD - dt);
-  f.dropT = Math.max(0, f.dropT - dt); f.wallT = Math.max(0, f.wallT - dt); f.coyote = Math.max(0, f.coyote - dt);
+  f.dropT = Math.max(0, f.dropT - dt); f.wallT = Math.max(0, f.wallT - dt); f.coyote = Math.max(0, f.coyote - dt); f.speedT = Math.max(0, f.speedT - dt);
   for (const k in i.buf) i.buf[k] = Math.max(0, i.buf[k] - dt);
   const stunned = f.stunT > 0; if (stunned) f.stunT -= dt;
   const dir = (i.right ? 1 : 0) - (i.left ? 1 : 0);
@@ -154,13 +154,13 @@ export function updateFighter(f, i, o, dt, map) {
     else if (f.airJump) { i.buf.up = 0; f.airJump = false; f.vy = -DJUMP_V; sfx('jump'); puff(f.x, f.y, 3); }
   }
 
-  // running and friction
-  const mf = stunned ? .35 : (recovering ? .5 : 1);
-  if (f.slideT > 0) { f.slideT -= dt; f.vx -= Math.sign(f.vx) * Math.min(Math.abs(f.vx), 520 * dt); f.crouch = false; }
+  // running and friction (ice has low grip: slow to speed up, slow to stop; speed pads raise top speed)
+  const mf = stunned ? .35 : (recovering ? .5 : 1), boost = f.speedT > 0 ? SPEED_MULT : 1;
+  if (f.slideT > 0) { f.slideT -= dt; f.vx -= Math.sign(f.vx) * Math.min(Math.abs(f.vx), 520 * grip * dt); f.crouch = false; }
   else if (f.dashT > 0) { f.dashT -= dt; f.crouch = false; }
   else {
     f.crouch = i.down && f.onGround;
-    const max = (f.crouch ? CROUCH_MAX : RUN_MAX) * mf, acc = (f.onGround ? RUN_ACC : AIR_ACC) * mf, fr = f.onGround ? GROUND_FRIC : AIR_FRIC;
+    const max = (f.crouch ? CROUCH_MAX : RUN_MAX) * mf * boost, acc = (f.onGround ? RUN_ACC * Math.sqrt(grip) : AIR_ACC) * mf * boost, fr = f.onGround ? GROUND_FRIC * grip : AIR_FRIC;
     if (dir !== 0) { let v = f.vx * dir; if (v < max) { if (v < 0) v += fr * dt; v = Math.min(v + acc * dt, max); } else v = Math.max(max, v - fr * dt); f.vx = v * dir; }
     else f.vx -= Math.sign(f.vx) * Math.min(Math.abs(f.vx), fr * dt);
   }
@@ -176,20 +176,16 @@ export function updateFighter(f, i, o, dt, map) {
   f.deflect *= Math.exp(-7 * dt);
 
   // gravity, short hop, wall slide
-  let g = GRAV; if (f.dashT > 0) g *= .25; if (!i.up && f.vy < 0) g *= 1.9;
+  // (letting go of jump early cuts a jump short, but not a jump-pad launch)
+  if (f.vy >= 0) f.padUp = false;
+  let g = GRAV; if (f.dashT > 0) g *= .25; if (!i.up && f.vy < 0 && !f.padUp) g *= 1.9;
   f.vy = Math.min(f.vy + g * dt, 1400);
   if (f.wallT > 0 && f.vy > 160 && dir === f.wallSide) f.vy = 160;
   f.x += f.vx * dt; f.y += f.vy * dt;
 
-  // walls, floor, platforms
-  const wasGround = f.onGround; f.onGround = false; f.onPlat = false;
-  if (f.x <= left) { f.x = left; if (f.vx < 0) f.vx = 0; f.wallSide = -1; f.wallT = .12; }
-  if (f.x >= right) { f.x = right; if (f.vx > 0) f.vx = 0; f.wallSide = 1; f.wallT = .12; }
-  const land = () => { if (!wasGround && f.vy > 520) { puff(f.x, f.y - 2, 4); sfx('land'); } f.vy = 0; f.onGround = true; f.airDash = true; f.airJump = true; f.wallT = 0; };
-  if (f.y >= floor) { f.y = floor; land(); }
-  else if (f.vy >= 0 && f.dropT <= 0) {
-    for (const p of platforms) { if (prevY <= p.y + 1 && f.y >= p.y && f.x > p.x - 4 && f.x < p.x + p.w + 4) { f.y = p.y; land(); f.onPlat = true; break; } }
-  }
+  // walls, floor (and gaps), platforms, ceiling, pads: see terrain.js
+  const wasGround = f.onGround;
+  collide(f, map, prevX, prevY, wasGround);
   if (wasGround && !f.onGround && f.vy >= 0) f.coyote = .08;
   if (f.onGround) f.phase += Math.abs(f.vx) * dt * .075;
   finishPose(f, flipped);

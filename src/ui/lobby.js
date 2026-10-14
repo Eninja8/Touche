@@ -4,17 +4,18 @@
 
 import {settings, saveSettings} from './settings.js';
 import {MAPS} from '../sim/maps.js';
-import {optionRow} from './options.js';
+import {optionRow, ON_OFF} from './options.js';
 import {showScreen, onBack} from './screens.js';
 
 const $ = id => document.getElementById(id);
 
 const OPTIONS = {
   diff: {label: 'Difficulty', values: [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']]},
-  map: {label: 'Map', values: Object.keys(MAPS).map(k => [k, MAPS[k].name])},
+  map: {label: 'Map', values: [['round', 'Random each round'], ['match', 'Random each match'], ...Object.keys(MAPS).map(k => [k, MAPS[k].name])]},
+  hazards: {label: 'Hazards', values: ON_OFF},
   target: {label: 'First to', values: [[3, '3'], [5, '5'], [7, '7'], [10, '10']]},
 };
-const MODE_OPTIONS = {cpu: ['diff', 'map', 'target'], local: ['map', 'target'], online: ['map', 'target']};
+const MODE_OPTIONS = {cpu: ['diff', 'map', 'hazards', 'target'], local: ['map', 'hazards', 'target'], online: ['map', 'hazards', 'target']};
 const TITLES = {cpu: 'vs CPU', local: 'Local', online: 'Online'};
 
 // The lobby being shown: {mode, readOnly, values, rows, onStart, onBack, onChange}

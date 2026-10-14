@@ -29,7 +29,7 @@ import {showScreen, hideScreens, onBack} from '../ui/screens.js';
 import {openLobby, lobbyValues, setLobbyValues, setLobbyStatus, setLobbyError, setStartEnabled, setReadyButton} from '../ui/lobby.js';
 import {onKill, hasRagdoll, undoKill, confirmKills, updateFx} from '../view/fx.js';
 
-const PROTOCOL = 6;          // bump when online play or gameplay changes, so mismatched versions refuse to play
+const PROTOCOL = 7;          // bump when online play or gameplay changes, so mismatched versions refuse to play
 const TIMEOUT_MS = 5000;     // no message for this long = disconnected
 const PING_MS = 500, RESEND_MS = 300, STALL_NOTE_MS = 500;
 const IDLE = [decode(EMPTY), decode(EMPTY)];
@@ -173,7 +173,7 @@ const roundKey = S => net.matchNo * 1000 + S.round; // unique per round, per mat
 
 function hostStartsMatch() {
   const o = settings.lobby.online;
-  const start = {t: 'start', no: net.matchNo + 1, seed: (Math.random() * 4294967296) >>> 0, target: o.target, map: o.map || DEFAULT_MAP};
+  const start = {t: 'start', no: net.matchNo + 1, seed: (Math.random() * 4294967296) >>> 0, target: o.target, map: o.map || DEFAULT_MAP, hazards: o.hazards !== false};
   sendCtl(start); beginMatch(start);
 }
 
@@ -181,7 +181,7 @@ function hostStartsMatch() {
 function beginMatch(c) {
   const S = hooks.app.S;
   net.matchNo = c.no; net.rematch = {me: false, peer: false}; net.kills = {}; net.desync = false;
-  newMatch(S, {online: true, seed: c.seed, target: c.target, map: c.map});
+  newMatch(S, {online: true, seed: c.seed, target: c.target, map: c.map, hazards: c.hazards});
   hooks.dispatch(drain());
   $('over').hidden = true; setStartEnabled(false); setLobbyStatus('Starting…');
   sendReady();

@@ -1,6 +1,7 @@
 # Touché dev log
 
 ## Current state
+- **Maps:** Hall, Open Hall (ring-out), Frozen Lake (ice, ring-out), Rooftops (gaps, open ends), Dojo (small, low ceiling, wall pieces), Forge (jump and speed pads). Lobby: Map (a map, Random each round, Random each match) and Hazards (On/Off).
 - **Menus:** Main (Play, Settings, corner fullscreen + mute icons) → Play (Online, vs CPU, Local) → a lobby with the match options (remembered per mode) → Start. Online: Host shows a room code and editable options; the joiner sees them read-only; both click Ready (which grabs the mouse); the host presses Start. Keyboard: arrows move, Left/Right change options, Enter picks, Esc goes back.
 - **Playable:** online 1v1 with room codes (rollback netcode over PeerJS), local 2-player (Red on mouse + keyboard, Green on keyboard), vs CPU (easy/normal/hard), menu demo bout, settings with key rebinding, sound, ragdoll deaths. Fixed 120 Hz simulation.
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
@@ -13,7 +14,7 @@
 1. Online 1v1 with room codes (built; being playtested).
 2. Phase A: menus and UI cleanup (done).
 3. Phase B: combat tuning (done).
-4. Phase C: maps and hazards (Frozen Lake, Rooftops, Dojo, Forge; ring-out; Hazards on/off; speed and jump pads; random map options).
+4. Phase C: maps and hazards (built; being playtested).
 5. Phase D: power-ups (Swift, Long Blade, Air Dash, Throwing Knife; Power-ups on/off).
 6. Controller support (Gamepad API). Not started.
 7. On hold until online has been tested with a friend: Windows EXE (Steam/Electron) with Steam lobbies and invites, and a relay server.
@@ -149,3 +150,38 @@ Owner's request: fencers could walk into each other and the point passed through
   - A 950 px/s mouse swing that beats a blade and carries on through the body doesn't kill (it shoves the body 35 px).
   - Swing-spamming forward wins 39% against Hard (must stay under 50%).
 - Online version bumped to 6.
+
+**Phase B follow-up feedback** (owner): beats were tuned as above; go ahead with Phase C.
+
+### 2026-10-14: Phase C, maps and hazards
+- *Map data* (`src/sim/maps.js`) now describes:
+  - floor stretches with gaps (`floors`)
+  - what the ends are (`ends`: `walls`, `ringout` or `drop`)
+  - a ceiling, free-standing wall pieces (`innerWalls`), pads, floor grip, a backdrop theme, and accent colours
+- *Arena collision* moved to `src/sim/terrain.js`:
+  - walls or open ends; floors with gaps (inside a gap the building sides are walls, so you can wall-jump back out)
+  - platforms, wall pieces, the ceiling, pads
+  - `isOut`: past a ring-out line, or 60 px below the floor
+- *Maps* (all spawn points are mirror images):
+  - **Hall:** unchanged. The long test gives exactly the same score as before the terrain rewrite.
+  - **Open Hall:** the Hall with ring-out end lines.
+  - **Frozen Lake:** ice (grip 0.2: slow to start, about 5× longer to stop), ring-out ends with open water past them, pines on the shore.
+  - **Rooftops:** three roofs with 70 px gaps; the ends drop off the buildings; city skyline (sunset in light mode, night with lit windows in dark mode).
+  - **Dojo:** a smaller arena (620 px between walls), a low ceiling (a double jump bonks it), two hanging wall pieces for wall jumps; paper screens, lanterns, tatami.
+  - **Forge:** jump pads that launch you to the high platforms (a pad launch always goes full height, even without holding jump), speed pads (a short burst: 1.6× top speed for 0.6 s, with a 430 px/s push); brick walls, a glowing furnace and embers.
+- *Ring-out:* going past an end line, or falling into a gap or off a drop, is a touch for the opponent, with an "OUT" label and no blood. Both out at once is a coup double. A blade shove can push someone out on an open map. Ring-out ends have a small flag marker.
+- *Hazards On/Off* (lobby, default On; the host's choice applies online): Off turns ring-out and drop ends into walls (drawn as a railing) and puts nets over rooftop gaps. Pads stay on.
+- *Map choice:* a specific map, Random each match, or Random each round. Picks come from the match seed, so both computers agree online; each new map differs from the previous one. The map's name shows under the scoring box at the start of each round. The menu's demo bout cycles through the maps.
+- *CPU safety* (pushing you out comes in Phase D):
+  - doesn't run, dash or slide past an open end, and brakes early on ice
+  - jumps rooftop gaps; when falling into a gap it double-jumps or wall-jumps out
+  - CPU-vs-CPU falls on Rooftops went from 42 to 7 per ~90 rounds
+- *Drawing* (`src/view/backdrops.js`): every map is drawn with code, no images. Effects know about gaps and open ends (bodies fall through gaps; blood still in the air is cleared when the map changes).
+- *Tests:*
+  - every map, hazards on and off, is deterministic, and rewind-and-replay matches
+  - walking past Open Hall's line is a touch; with hazards off it's a wall
+  - running into a rooftop gap or off the end is out; with hazards off the net holds
+  - ice slides 69 px vs 13 px on the Hall; the jump pad reaches y 193; the speed pad gives 432 px/s
+  - random maps: same seed, same maps, never the same map twice in a row
+  - a new netcode run with random maps each round and hazards on (100 ms, 5% loss): both players agree
+- *Browser checks:* screenshots of every map in light and dark; a vs CPU match on random maps played to game over with no errors; a two-window online match with random maps, 93 ms ping and 2% loss had matching scores and no errors. Online version bumped to 7.

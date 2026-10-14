@@ -11,15 +11,16 @@ import {clamp, segSeg} from './util.js';
 import {mkFighter, mkInput, finishPose, updateFighter} from './fighter.js';
 import {bladeContact, bladePush, clash, kill} from './combat.js';
 import {mkAI, aiStep} from './ai.js';
-import {rand} from './rng.js';
-import {getMap, DEFAULT_MAP} from './maps.js';
+import {rand, random} from './rng.js';
+import {getMap, MAPS, MAP_KEYS, DEFAULT_MAP} from './maps.js';
+import {isOut, boundX} from './terrain.js';
 import {emit} from './events.js';
 
 // A brand-new game state with nothing carried over.
 function freshState(seed) {
   return {
     tick: 0, rng: seed | 0, map: DEFAULT_MAP,
-    mode: {demo: true, vsCPU: false, online: false, diff: 'normal', target: 5},
+    mode: {demo: true, vsCPU: false, online: false, diff: 'normal', target: 5, hazards: true, mapPick: null},
     phase: 'countdown', // countdown → fight → ko → (next round) … → over
     timer: 0,           // ticks spent in the current phase (countdown / ko)
     round: 0,           // round number within the current match (online play uses it to stay in step)
@@ -41,28 +42,38 @@ export const snapshot = S => structuredClone(S);
 export const isAI = (S, p) => S.mode.demo || (p === 1 && S.mode.vsCPU);
 
 // Start the menu exhibition bout, or a real match.
-// opts: {demo, vsCPU, online, diff, target, seed, map}
+// opts: {demo, vsCPU, online, diff, target, seed, map, hazards}
+// map: a map name, or 'match' (a random map for the whole match) or 'round' (a new random
+// map every round). The random picks use the match seed, so online both computers agree.
 export function newMatch(S, opts) {
   // Wipe everything from before (such as the menu's demo bout) so that two
   // computers starting the same online match start from identical states.
   for (const k of Object.keys(S)) delete S[k];
   Object.assign(S, freshState(opts.seed));
-  S.map = opts.map || DEFAULT_MAP;
-  S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, online: !!opts.online, diff: opts.diff || 'normal', target: opts.target || 5};
+  const pick = opts.map === 'match' || opts.map === 'round' ? opts.map : null;
+  S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, online: !!opts.online, diff: opts.diff || 'normal', target: opts.target || 5, hazards: opts.hazards !== false, mapPick: pick};
+  S.map = pick ? pickMap(S) : MAPS[opts.map] ? opts.map : DEFAULT_MAP;
   if (S.mode.demo) { S.AI[0].diff = S.AI[1].diff = 'normal'; }
   else S.AI[1].diff = S.mode.diff;
   emit('matchStart');
   startRound(S);
 }
 
+// A random map, different from the current one.
+function pickMap(S) {
+  const others = MAP_KEYS.filter(k => k !== S.map);
+  return others[Math.floor(random(S) * others.length)];
+}
+
 function startRound(S) {
+  if (S.mode.mapPick === 'round' && S.round > 0) S.map = pickMap(S);
   const m = getMap(S);
   for (let p = 0; p < 2; p++) { const sp = m.spawns[p]; S.F[p] = mkFighter(p, sp.x, m.floor, sp.face); }
   for (const f of S.F) finishPose(f);
   for (const i of S.inp) { for (const k in i.buf) i.buf[k] = 0; }
   for (const a of S.AI) { a.t = rand(S, .2, .5); a.move = 0; a.holdUp = 0; a.targetAng = .2; }
   S.phase = 'countdown'; S.timer = 0; S.koWho = null; S.hitstop = 0; S.round++;
-  emit('roundStart');
+  emit('roundStart', {map: S.map, name: m.name});
 }
 
 // The lamp and callout events are tagged 'ko' so online play can hold them back
@@ -101,6 +112,11 @@ function applyCommand(i, cmd) {
 }
 
 // Countdown calls and the pause after a touch.
+function goOut(f) {
+  emit('text', {x: f.x, y: Math.min(f.y, 470) - 110, text: 'OUT', color: 'ink'});
+  kill(f, {p: {x: f.x, y: f.y - 50}, vx: f.vx, vy: f.vy, sp: 0, part: 'out', tip: false, lethal: true});
+}
+
 function updateFlow(S) {
   if (S.phase === 'countdown') {
     if (S.timer === 0) { emit('callout', {text: 'EN GARDE', color: 'ink', dur: .55}); emit('sfx', {name: 'ready'}); }
@@ -119,7 +135,7 @@ export function step(S, cmds) {
   for (let p = 0; p < 2; p++) if (!isAI(S, p)) applyCommand(S.inp[p], cmds[p]);
   if (S.hitstop > 0) { S.hitstop--; return false; }
 
-  const dt = DT, map = getMap(S), {left: LEFT, right: RIGHT} = map.walls, ph = S.phase, live = ph === 'fight' || ph === 'ko' || ph === 'over';
+  const dt = DT, map = getMap(S), ph = S.phase, live = ph === 'fight' || ph === 'ko' || ph === 'over';
   for (let p = 0; p < 2; p++) if (isAI(S, p)) aiStep(S, p, dt);
   const [a, b] = S.F;
   if (live) { updateFighter(a, S.inp[0], b, dt, map); updateFighter(b, S.inp[1], a, dt, map); }
@@ -128,7 +144,7 @@ export function step(S, cmds) {
   // bodies don't overlap
   if (a.alive && b.alive) {
     const dx = b.x - a.x;
-    if (Math.abs(dx) < 20 && Math.abs(a.y - b.y) < 70) { const push = (20 - Math.abs(dx)) / 2 * (Math.sign(dx) || 1); a.x = clamp(a.x - push, LEFT, RIGHT); b.x = clamp(b.x + push, LEFT, RIGHT); }
+    if (Math.abs(dx) < 20 && Math.abs(a.y - b.y) < 70) { const push = (20 - Math.abs(dx)) / 2 * (Math.sign(dx) || 1); a.x = boundX(map, a.x - push); b.x = boundX(map, b.x + push); }
   }
 
   // blade against blade
@@ -143,6 +159,13 @@ export function step(S, cmds) {
     if (k1) kill(b, h1); if (k2) kill(a, h2);
     if (k1 || k2) roundOver(S, k1, k2);
     else { if (h1) bladePush(a, b, map); if (h2) bladePush(b, a, map); }
+  }
+
+  // out of the arena (past a ring-out line, or fallen): a touch for the opponent; both = coup double
+  if (S.phase === 'fight' && a.alive && b.alive) {
+    const outA = isOut(a, map), outB = isOut(b, map);
+    if (outA) goOut(a); if (outB) goOut(b);
+    if (outA || outB) roundOver(S, outB, outA);
   }
 
   updateFlow(S);

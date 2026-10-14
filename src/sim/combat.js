@@ -1,9 +1,10 @@
 // Blade-on-body hits, blade-on-blade clashes, parries and kills.
 
 import {DT, ARM, BLADE, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS, BEAT_SPEED, BEAT_RATIO, BEAT_KNOCK, BEAT_OPEN, BEAT_CD, BEAT_MEET} from './constants.js';
-import {clamp, lerp, distPtSeg, distPtSegX} from './util.js';
+import {lerp, distPtSeg, distPtSegX} from './util.js';
 import {bodyParts, lungeActive} from './fighter.js';
 import {emit} from './events.js';
+import {boundX} from './terrain.js';
 
 // The blade is checked at SAMPLES+1 points, from 30% of the way along it (near the
 // guard) out to the point. 12 gaps keep them closer together than a limb is thick.
@@ -45,9 +46,10 @@ function overlap(A, B, ox) {
   return worst;
 }
 
-// Slide fighter f sideways by dx (stopping at the walls), pose included. Returns how far it moved.
+// Slide fighter f sideways by dx (stopping at solid walls), pose included. Returns how far it moved.
+// On open-ended maps nothing stops it, so a blade can shove someone out.
 function slide(f, dx, map) {
-  const nx = clamp(f.x + dx, map.walls.left, map.walls.right), moved = nx - f.x;
+  const nx = boundX(map, f.x + dx), moved = nx - f.x;
   f.x = nx;
   for (const k in f.P) if (f.P[k] && f.P[k].x !== undefined) f.P[k].x += moved;
   return moved;

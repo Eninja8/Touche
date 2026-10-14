@@ -19,7 +19,7 @@ import {showScreen, hideScreens} from './ui/screens.js';
 import {cross, resetCross, isLocked, requestLock, releaseLock, onLockChange} from './ui/mouse.js';
 import {unlockAudio, sfx} from './view/audio.js';
 import {C} from './view/theme.js';
-import {fx, view, puff, sparks, beatFx, callout, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
+import {fx, view, puff, sparks, beatFx, callout, showMapName, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
 import {render} from './view/render.js';
 import * as online from './net/online.js';
 
@@ -28,6 +28,7 @@ import * as online from './net/online.js';
 const newSeed = () => (Math.random() * 4294967296) >>> 0;
 
 let slow = 0; // seconds of KO slow motion left (real time)
+let lastMap = null; // map of the last round (blood is cleared when it changes)
 let resumeWanted = false; // waiting for the mouse lock before un-pausing
 
 // Does the match need the mouse locked right now?
@@ -43,13 +44,13 @@ const app = {
   menuOpen: false, // online: pause menu showing (the match keeps running)
   lastMatch: null, // {mode, opts} of the last local match, for Rematch
 
-  // A local match. mode: 'cpu' or 'local'; opts: the lobby's {diff, map, target}.
+  // A local match. mode: 'cpu' or 'local'; opts: the lobby's {diff, map, hazards, target}.
   startMatch(mode, opts) {
     unlockAudio();
     app.lastMatch = {mode, opts};
     app.paused = false; hideScreens(); pauseEl.hidden = true; overEl.hidden = true; setEl.hidden = true;
     if (settings.mouseAim) requestLock().catch(() => {});
-    newMatch(app.S, {demo: false, vsCPU: mode === 'cpu', diff: opts.diff, target: opts.target, map: opts.map, seed: newSeed()});
+    newMatch(app.S, {demo: false, vsCPU: mode === 'cpu', diff: opts.diff, target: opts.target, map: opts.map, hazards: opts.hazards, seed: newSeed()});
     dispatch(drain());
   },
 
@@ -59,7 +60,7 @@ const app = {
     document.getElementById('netmsg').hidden = true;
     app.paused = false; pauseEl.hidden = true; overEl.hidden = true; ui.cancelRebind();
     showScreen('menu', 'bplay');
-    newMatch(app.S, {demo: true, seed: newSeed()});
+    newMatch(app.S, {demo: true, seed: newSeed(), map: 'round'});
     dispatch(drain());
   },
 
@@ -120,10 +121,13 @@ function dispatch(events, isOnline) {
       case 'callout': callout(e.text, C[e.color], e.dur); break;
       case 'lamp': setLamp(e.p, e.on); break;
       case 'kill': onKill(e.victim, e.hit, isOnline); if (!isOnline) slow = .8; sfx('kill', S.mode.demo); break;
-      case 'roundStart': resetRound(S); resetCross(S.F[localIndex(S)].face); slow = 0; setLamp(0, false); setLamp(1, false); refreshHud(); break;
+      case 'roundStart':
+        if (e.map !== lastMap) { lastMap = e.map; clearDecals(getMap(S)); }
+        if (!S.mode.demo) showMapName(e.name);
+        resetRound(S); resetCross(S.F[localIndex(S)].face); slow = 0; setLamp(0, false); setLamp(1, false); refreshHud(); break;
       case 'score': refreshHud(); break;
       case 'matchOver': releaseLock(); showGameOver(S, e.winner, S.mode.online ? online.localPlayer() : -1); break;
-      case 'matchStart': case 'clearDecals': clearDecals(getMap(S)); break;
+      case 'matchStart': case 'clearDecals': clearDecals(getMap(S)); lastMap = null; break;
     }
   }
 }

@@ -8,7 +8,7 @@ export const DEFAULT_BINDS = [
 export const ACTIONS = [['left', 'Move left'], ['right', 'Move right'], ['up', 'Jump'], ['down', 'Crouch · slide · drop'], ['raise', 'Raise blade'], ['lower', 'Lower blade'], ['attack', 'Thrust'], ['dash', 'Dash']];
 
 // Last-used lobby options for each mode (see lobby.js).
-const DEFAULT_LOBBY = {cpu: {diff: 'normal', map: 'hall', target: 5}, local: {map: 'hall', target: 5}, online: {map: 'hall', target: 5}};
+const DEFAULT_LOBBY = {cpu: {diff: 'normal', map: 'hall', hazards: true, target: 5}, local: {map: 'hall', hazards: true, target: 5}, online: {map: 'hall', hazards: true, target: 5}};
 
 // mouseAim: Red aims with the mouse (online: you aim with yours). sens: mouse sensitivity multiplier.
 // aimIndicator: 'arrow' or 'off' (the faint chevron showing where the mouse aims).
