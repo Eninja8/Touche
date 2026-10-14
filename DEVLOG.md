@@ -10,7 +10,7 @@
 ## Session log
 
 ### 2026-10-14: Phase 1 (setup, restructure, deploy)
-- Checked tools: Node.js v20.11.1 (installed, but past its end-of-life in April 2026; upgrading to the current LTS is recommended), npm 10.2.4, git 2.44.
+- Checked tools: Node.js v20.11.1 (past end-of-life; upgraded in the next session), npm 10.2.4, git 2.44.
 - Created the git repo with `.gitignore`/`.gitattributes`, committed the original single-file game as-is, pushed to github.com/Eninja8/Touche. Switched this repo to Git Credential Manager for sign-in.
 - Split `index.html` into modules without changing gameplay:
   - Simulation is a plain state object `S` plus `step(S, commands)`. No DOM, clocks or `Math.random` inside `src/sim`.
@@ -27,3 +27,8 @@
 - Verified in headless Chrome: no console errors; ~5.5 minutes of fast-forwarded CPU-vs-CPU bouts (86 touches) without errors; a full CPU match reaches the game-over screen (0–5).
 - Enabled GitHub Pages (main branch, root). Live site checked.
 - Wrote CLAUDE.md and the Phase 2 online plan.
+
+### 2026-10-14: Phase 2 kickoff
+Owner approved the online plan and PeerJS with its free public server.
+
+**Part 1, Node upgrade:** installed Node.js v24.20.0 LTS with winget (was v20.11.1, end-of-life). `npm test` passes on Node 24. `package.json` now states `"engines": {"node": ">=24"}`.
