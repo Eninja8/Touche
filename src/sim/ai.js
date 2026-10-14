@@ -8,14 +8,17 @@ import {clamp} from './util.js';
 import {random, rand} from './rng.js';
 
 // react: seconds between decisions; block: chance to defend a thrust;
-// aggro: how often it attacks; ang: blade turn speed; err: aim wobble.
+// aggro: how often it attacks; ang: blade turn speed; err: aim wobble;
+// slide: chance to read an incoming slide; slideReact: how fast it notices (s).
 export const DIFF = {
-  easy: {react: .24, block: .3, aggro: .4, ang: 4.2, err: .35},
-  normal: {react: .15, block: .55, aggro: .6, ang: 5.2, err: .2},
-  hard: {react: .085, block: .8, aggro: .75, ang: 6.2, err: .1},
+  easy: {react: .24, block: .3, aggro: .4, ang: 4.2, err: .35, slide: .3, slideReact: .2},
+  normal: {react: .15, block: .55, aggro: .6, ang: 5.2, err: .2, slide: .75, slideReact: .08},
+  hard: {react: .085, block: .8, aggro: .75, ang: 6.2, err: .1, slide: .92, slideReact: .05},
 };
 
-export const mkAI = () => ({t: 0, move: 0, crouch: false, targetAng: .2, holdUp: 0, diff: 'normal'});
+// slideSeen: the opponent's current slide was already noticed; slideIn: seconds until it reacts
+// (-1 = not reacting); plan: how it answers that slide ('meet', 'jump', 'jumped', 'back' or null)
+export const mkAI = () => ({t: 0, move: 0, crouch: false, targetAng: .2, holdUp: 0, diff: 'normal', slideSeen: false, slideIn: -1, plan: null});
 
 function aimAt(me, pt) { const sh = me.P.sh; return clamp(Math.atan2(-(pt.y - sh.y), (pt.x - sh.x) * me.face), ANG_MIN, ANG_MAX); }
 
@@ -25,9 +28,32 @@ export function aiStep(S, p, dt) {
   me.angSpd = d.ang;
   if (!me.alive) { i.left = i.right = i.raise = i.lower = i.up = i.down = false; return; }
   A.t -= dt; A.holdUp -= dt;
+  watchSlide(S, me, op, i, A, d, dt);
   if (A.t <= 0) { A.t = d.react * rand(S, .6, 1.4); think(S, me, op, i, A, d); }
   const da = A.targetAng - me.angle; i.raise = da > .05; i.lower = da < -.05;
   i.left = A.move < 0; i.right = A.move > 0; i.down = A.crouch; i.up = A.holdUp > 0;
+}
+
+// Incoming slide: notice it (maybe), then after a short delay answer it:
+//  meet: put the point on the incoming blade (blades clash) or the slider runs onto it,
+//  jump: jump just before the point arrives, so it passes underneath,
+//  back: dash away.
+function watchSlide(S, me, op, i, A, d, dt) {
+  const toward = Math.sign(me.x - op.x) || 1; // the direction that brings the slider closer
+  const incoming = op.slideT > 0 && op.alive && Math.sign(op.vx) === toward;
+  if (!incoming) { A.slideSeen = false; A.slideIn = -1; A.plan = null; return; }
+  if (!A.slideSeen) { A.slideSeen = true; if (random(S) < d.slide) A.slideIn = d.slideReact * rand(S, .7, 1.3); }
+  // seconds until the slider's point reaches my front foot
+  const gap = Math.abs(op.P.tip.x - me.x) - 14, tc = Math.max(0, gap) / Math.max(1, Math.abs(op.vx));
+  if (A.slideIn >= 0 && (A.slideIn -= dt) <= 0) {
+    A.slideIn = -1;
+    const turnTime = Math.abs(aimAt(me, op.P.tip) - me.angle) / d.ang, r = random(S);
+    A.plan = turnTime < tc - .03 && r < .6 ? 'meet' : tc > .14 && r < .85 ? 'jump' : 'back';
+    if (A.plan === 'back') { A.move = toward; i.buf.dash = .1; } // `toward` points from the slider to me: away from it
+  }
+  if (A.plan === 'meet') { A.targetAng = aimAt(me, op.P.tip); A.move = 0; A.crouch = false; }
+  if (A.plan === 'jump' && tc < .17) { i.buf.up = .1; A.holdUp = .35; A.move = 0; A.plan = 'jumped'; }
+  if (A.plan) A.t = Math.max(A.t, .05); // no other decisions until the slide has passed
 }
 
 // Make a new decision: defend, reposition, attack, jump...
