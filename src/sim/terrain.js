@@ -51,7 +51,7 @@ export function collide(f, map, prevX, prevY, wasGround) {
 
   const land = grip => {
     if (!wasGround && f.vy > 520) { emit('puff', {x: f.x, y: f.y - 2, n: 4}); emit('sfx', {name: 'land'}); }
-    f.vy = 0; f.onGround = true; f.airDash = true; f.airJump = true; f.wallT = 0; f.grip = grip;
+    f.vy = 0; f.onGround = true; f.airDash = true; f.airDashN = 0; f.airJump = true; f.wallT = 0; f.grip = grip;
   };
   // up and down: land on top of a block, or bump your head on its underside
   for (const s of map.solids) {
@@ -70,7 +70,7 @@ function pads(f, map) {
   for (const p of map.pads) {
     if (f.x < p.x || f.x > p.x + p.w || Math.abs(f.y - p.y) > 1) continue;
     if (p.type === 'jump') {
-      f.vy = -p.power; f.padUp = true; f.onGround = false; f.coyote = 0; f.airJump = true; f.airDash = true; f.y -= 1;
+      f.vy = -p.power; f.padUp = true; f.onGround = false; f.coyote = 0; f.airJump = true; f.airDash = true; f.airDashN = 0; f.y -= 1;
       emit('sfx', {name: 'pad'}); emit('puff', {x: f.x, y: f.y, n: 6});
     } else if (p.type === 'speed') {
       if (f.speedT <= 0 && Math.abs(f.vx) > 20) { if (Math.abs(f.vx) < SPEED_KICK) f.vx = Math.sign(f.vx) * SPEED_KICK; emit('sfx', {name: 'dash'}); }

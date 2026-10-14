@@ -48,3 +48,17 @@ export const HITSTOP_TICKS = Math.ceil(0.045 * TICK_HZ);
 // (fast enough that a full swing is lethal). Within AIM_DEADZONE pixels of
 // straight up/down, the fencer keeps facing the same way.
 export const AIM_REACH = 160, MOUSE_TURN = 9.5, AIM_DEADZONE = 3;
+
+// Power-ups (Power-ups On in the lobby; see powerups.js). One is waiting on the map when a
+// round starts, and another appears POWER_AGAIN seconds after the last was taken, at one of
+// the map's spots. Each lasts until the end of the round; picking up another replaces it.
+export const POWER_AGAIN = 7;
+// Swift: run speed and acceleration x SWIFT_RUN, dash recovery x SWIFT_DASH_CD.
+export const SWIFT_RUN = 1.3, SWIFT_DASH_CD = 0.6;
+// Long Blade: the blade's length (normal: BLADE).
+export const LONG_BLADE = 106;
+// Air Dash: dashes allowed per jump (normally 1), and the dash recovery in the air.
+export const AIR_DASHES = 3, AIR_DASH_CD = 0.25;
+// Throwing Knife: one throw, flying the way the blade points at KNIFE_V px/s with a little
+// gravity, for at most KNIFE_LIFE seconds. It kills on any touch; a blade in its path blocks it.
+export const KNIFE_V = 1050, KNIFE_GRAV = 450, KNIFE_LIFE = 1.2;

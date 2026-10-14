@@ -1,6 +1,6 @@
 // Keyboard and mouse. Turns what the player is doing into one "command" per
 // player per tick, which is the only way input reaches the simulation:
-//   {held: {left,right,up,down,raise,lower}, presses: ['attack', ...], aim: {x,y} | null}
+//   {held: {left,right,up,down,raise,lower}, presses: ['attack', 'throw', ...], aim: {x,y} | null}
 // `aim` is the mouse crosshair's offset from the shoulder (see mouse.js), or
 // null for keyboard aiming. For online play, these small commands are exactly
 // what gets sent over the network.
@@ -21,9 +21,9 @@ let onlinePlayer = -1;
 export function setOnlinePlayer(p) { onlinePlayer = p; }
 
 // Against the CPU (and online), the Red layout can also use arrows/Space/Shift.
-const CPU_EXTRA = {left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp', 'Space'], down: ['ArrowDown'], raise: [], lower: [], attack: [], dash: ['ShiftLeft']};
+const CPU_EXTRA = {left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp', 'Space'], down: ['ArrowDown'], raise: [], lower: [], attack: [], dash: ['ShiftLeft'], throw: []};
 const GAME_CODES = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Quote', 'Semicolon']);
-const HELD = ['left', 'right', 'up', 'down', 'raise', 'lower'], TAPS = ['up', 'down', 'attack', 'dash'];
+const HELD = ['left', 'right', 'up', 'down', 'raise', 'lower'], TAPS = ['up', 'down', 'attack', 'dash', 'throw'];
 
 function bind(S, p) { const b = settings.binds[p], o = {}; for (const k in b) o[k] = [b[k]].concat(p === 0 && (S.mode.vsCPU || S.mode.online) ? CPU_EXTRA[k] : []); return o; }
 
@@ -93,7 +93,7 @@ export function initInput(app, ui) {
   addEventListener('keyup', e => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
 
-  // Mouse buttons for the mouse-aiming player: left = thrust, right = dash.
+  // Mouse buttons for the mouse-aiming player: left = thrust, right = dash, middle = throw.
   // A click while the mouse isn't locked just grabs it.
   cv.addEventListener('mousedown', e => {
     unlockAudio(); const S = app.S, mp = mousePlayer(S);
@@ -101,6 +101,7 @@ export function initInput(app, ui) {
     if (!isLocked()) { requestLock().catch(() => {}); return; }
     if (e.button === 0) presses[0].add('attack');
     if (e.button === 2) presses[0].add('dash');
+    if (e.button === 1) { e.preventDefault(); presses[0].add('throw'); }
   });
   cv.addEventListener('contextmenu', e => e.preventDefault());
 }

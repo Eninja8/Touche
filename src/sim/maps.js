@@ -14,6 +14,7 @@
 //   pads:       [{type: 'jump' | 'speed', x, w, y, power}] jump pads launch you up (power = px/s);
 //               speed pads give a short burst of run speed. Pads aren't hazards.
 //   spawns:     where Red [0] and Green [1] start each round (mirror images of each other)
+//   items:      spots where power-ups can appear [{x, y}] (y = the surface), in mirrored pairs
 //   colors:     light/dark colours used for the arena: sky, skyLow, floor, platform, line, accent
 //
 // Touching spikes is a touch for the opponent (both at once: coup double).

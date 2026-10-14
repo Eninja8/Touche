@@ -20,6 +20,7 @@ export default {
     {x: 138, y0: 330, y1: 530, look: 'ladder', to: SIDE}, {x: 1662, y0: 330, y1: 530, look: 'ladder', to: SIDE},
   ],
   spawns: [{x: 760, y: MID, face: 1}, {x: 1040, y: MID, face: -1}],
+  items: [{x: 760, y: 500}, {x: 1040, y: 500}, {x: 265, y: 470}, {x: 1535, y: 470}, {x: 250, y: 640}, {x: 1550, y: 640}], // power-up spots, in mirrored pairs
   colors: {
     light: {sky: '#f4c9a1', skyLow: '#e79f86', floor: '#8b8f99', platform: '#5c616c', line: '#231c26', accent: '#f2a541'},
     dark: {sky: '#0b0f1e', skyLow: '#1b1f3a', floor: '#30364a', platform: '#454c66', line: '#e6e9f5', accent: '#ffd36b'},

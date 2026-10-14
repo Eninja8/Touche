@@ -4,14 +4,14 @@
 import {MAPS} from '../sim/maps.js';
 
 export const DEFAULT_BINDS = [
-  {left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', raise: 'KeyQ', lower: 'KeyE', attack: 'KeyF', dash: 'KeyG'},
-  {left: 'KeyJ', right: 'KeyL', up: 'KeyI', down: 'KeyK', raise: 'KeyU', lower: 'KeyO', attack: 'Semicolon', dash: 'Quote'},
+  {left: 'KeyA', right: 'KeyD', up: 'KeyW', down: 'KeyS', raise: 'KeyQ', lower: 'KeyE', attack: 'KeyF', dash: 'KeyG', throw: 'KeyR'},
+  {left: 'KeyJ', right: 'KeyL', up: 'KeyI', down: 'KeyK', raise: 'KeyU', lower: 'KeyO', attack: 'Semicolon', dash: 'Quote', throw: 'KeyP'},
 ];
-export const ACTIONS = [['left', 'Move left'], ['right', 'Move right'], ['up', 'Jump · climb'], ['down', 'Crouch · slide · drop'], ['raise', 'Raise blade'], ['lower', 'Lower blade'], ['attack', 'Thrust'], ['dash', 'Dash']];
+export const ACTIONS = [['left', 'Move left'], ['right', 'Move right'], ['up', 'Jump · climb'], ['down', 'Crouch · slide · drop'], ['raise', 'Raise blade'], ['lower', 'Lower blade'], ['attack', 'Thrust'], ['dash', 'Dash'], ['throw', 'Throw knife']];
 
 // Last-used lobby options for each mode (see lobby.js).
 // (map: 'round' = a random map each round, 'match' = one random map per match, or a map's key)
-const DEFAULT_LOBBY = {cpu: {diff: 'normal', map: 'round', hazards: true, target: 5}, local: {map: 'round', hazards: true, target: 5}, online: {map: 'round', hazards: true, target: 5}};
+const DEFAULT_LOBBY = {cpu: {diff: 'normal', map: 'round', hazards: true, powerups: true, target: 5}, local: {map: 'round', hazards: true, powerups: true, target: 5}, online: {map: 'round', hazards: true, powerups: true, target: 5}};
 
 // mouseAim: Red aims with the mouse (online: you aim with yours). sens: mouse sensitivity multiplier.
 // aimIndicator: 'arrow' or 'off' (the faint chevron showing where the mouse aims).

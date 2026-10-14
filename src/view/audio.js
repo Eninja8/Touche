@@ -47,6 +47,8 @@ const SFX = {
   land() { noise(.07, .12, 'lowpass', 500); },
   slide() { noise(.25, .07, 'lowpass', 1200, 300); },
   kill() { tone(160, .42, 'sine', .32, 40); noise(.2, .28, 'lowpass', 900); tone(980, .12, 'triangle', .08, 500); },
+  pickup() { tone(660, .09, 'triangle', .1, 990); tone(990, .18, 'sine', .08, 1480); },
+  throw() { noise(.16, .16, 'bandpass', 1400, 4200); tone(700, .08, 'triangle', .04, 1100); },
   ready() { tone(523, .12, 'square', .035); },
   allez() { tone(784, .28, 'square', .05); tone(1046, .28, 'square', .03); },
 };

@@ -19,7 +19,7 @@ import {showScreen, hideScreens} from './ui/screens.js';
 import {cross, resetCross, isLocked, requestLock, releaseLock, onLockChange} from './ui/mouse.js';
 import {unlockAudio, sfx} from './view/audio.js';
 import {C} from './view/theme.js';
-import {fx, view, puff, sparks, beatFx, callout, showMapName, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
+import {fx, view, puff, sparks, beatFx, pickupFx, callout, showMapName, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
 import {render} from './view/render.js';
 import {snapCamera} from './view/camera.js';
 import * as online from './net/online.js';
@@ -45,13 +45,13 @@ const app = {
   menuOpen: false, // online: pause menu showing (the match keeps running)
   lastMatch: null, // {mode, opts} of the last local match, for Rematch
 
-  // A local match. mode: 'cpu' or 'local'; opts: the lobby's {diff, map, hazards, target}.
+  // A local match. mode: 'cpu' or 'local'; opts: the lobby's {diff, map, hazards, powerups, target}.
   startMatch(mode, opts) {
     unlockAudio();
     app.lastMatch = {mode, opts};
     app.paused = false; hideScreens(); pauseEl.hidden = true; overEl.hidden = true; setEl.hidden = true;
     if (settings.mouseAim) requestLock().catch(() => {});
-    newMatch(app.S, {demo: false, vsCPU: mode === 'cpu', diff: opts.diff, target: opts.target, map: opts.map, hazards: opts.hazards, seed: newSeed()});
+    newMatch(app.S, {demo: false, vsCPU: mode === 'cpu', diff: opts.diff, target: opts.target, map: opts.map, hazards: opts.hazards, powerups: opts.powerups !== false, seed: newSeed()});
     dispatch(drain());
   },
 
@@ -61,7 +61,7 @@ const app = {
     document.getElementById('netmsg').hidden = true;
     app.paused = false; pauseEl.hidden = true; overEl.hidden = true; ui.cancelRebind();
     showScreen('menu', 'bplay');
-    newMatch(app.S, {demo: true, seed: newSeed(), map: 'round'});
+    newMatch(app.S, {demo: true, seed: newSeed(), map: 'round', powerups: true});
     dispatch(drain());
   },
 
@@ -117,6 +117,7 @@ function dispatch(events, isOnline) {
       case 'puff': puff(e.x, e.y, e.n); break;
       case 'sparks': sparks(e.x, e.y, e.n); break;
       case 'beat': beatFx(e.x, e.y); break;
+      case 'pickup': pickupFx(e.x, e.y); break;
       case 'shake': view.shake = Math.max(view.shake, e.amount); break;
       case 'text': fx.push({type: 'text', x: e.x, y: e.y, vx: 0, vy: -60, life: .8, max: .8, text: e.text, color: C[e.color]}); break;
       case 'callout': callout(e.text, C[e.color], e.dur); break;

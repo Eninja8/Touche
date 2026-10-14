@@ -10,6 +10,7 @@ import {clamp} from './util.js';
 import {random, rand} from './rng.js';
 import {navFor, nodeAt, dangerBehind} from './ai-nav.js';
 import {runScript, chase, followEdge, escape, bait, guard} from './ai-chase.js';
+import {powerDecision, powerTick} from './ai-power.js';
 
 // react: seconds between decisions; block: chance to defend a thrust;
 // aggro: how often it attacks; ang: blade turn speed; err: aim wobble;
@@ -21,10 +22,12 @@ import {runScript, chase, followEdge, escape, bait, guard} from './ai-chase.js';
 // Hazards: careful = chance to check its keys won't take it onto spikes (every few ticks);
 // pin = chance to press forward when the opponent's back is to a pit; bait = chance to
 // wait across a pit instead of jumping it; escape = chance to jump clear when cornered.
+// Power-ups (ai-power.js): grab = chance to go for a pickup; throw = chance to throw the knife
+// when lined up; lead = how well it leads a moving target; dodge = chance to dodge or block a knife.
 export const DIFF = {
-  easy: {react: .24, block: .3, aggro: .4, ang: 4.2, err: .35, slide: .3, slideReact: .2, beat: 0, wildBack: .1, wildMeet: .05, punish: .2, careful: .6, pin: .2, bait: 0, escape: .15},
-  normal: {react: .15, block: .55, aggro: .6, ang: 5.2, err: .2, slide: .75, slideReact: .08, beat: .06, wildBack: .3, wildMeet: .15, punish: .5, careful: .92, pin: .5, bait: .3, escape: .35},
-  hard: {react: .085, block: .8, aggro: .75, ang: 6.2, err: .1, slide: .92, slideReact: .05, beat: .12, wildBack: .3, wildMeet: .15, punish: .6, careful: 1, pin: .8, bait: .45, escape: .6},
+  easy: {react: .24, block: .3, aggro: .4, ang: 4.2, err: .35, slide: .3, slideReact: .2, beat: 0, wildBack: .1, wildMeet: .05, punish: .2, careful: .6, pin: .2, bait: 0, escape: .15, grab: .35, throw: .25, lead: 0, dodge: .2},
+  normal: {react: .15, block: .55, aggro: .6, ang: 5.2, err: .2, slide: .75, slideReact: .08, beat: .06, wildBack: .3, wildMeet: .15, punish: .5, careful: .92, pin: .5, bait: .3, escape: .35, grab: .65, throw: .4, lead: .6, dodge: .5},
+  hard: {react: .085, block: .8, aggro: .75, ang: 6.2, err: .1, slide: .92, slideReact: .05, beat: .12, wildBack: .3, wildMeet: .15, punish: .6, careful: 1, pin: .8, bait: .45, escape: .6, grab: .85, throw: .55, lead: 1, dodge: .75},
 };
 
 // slideSeen: the opponent's current slide was already noticed; slideIn: seconds until it reacts
@@ -32,9 +35,10 @@ export const DIFF = {
 // script: a move being carried out (ai-plan.js); edge/goal: the next step of a chase (ai-nav.js);
 // opNode: where the opponent last stood; waitT: seconds left baiting across a pit;
 // bad/badT: a move that just failed, and how long to avoid it.
+// throwT: waiting to throw the knife once the blade points the right way; dodgeT: knife reaction cooldown.
 export const mkAI = () => ({t: 0, move: 0, crouch: false, targetAng: .2, holdUp: 0, diff: 'normal', slideSeen: false, slideIn: -1, plan: null, wild: 0,
-  script: null, edge: -1, goal: -1, opNode: -1, waitT: 0, bad: -1, badT: 0});
-export function resetAI(a) { Object.assign(a, {move: 0, crouch: false, targetAng: .2, holdUp: 0, slideSeen: false, slideIn: -1, plan: null, wild: 0, script: null, edge: -1, goal: -1, opNode: -1, waitT: 0, bad: -1, badT: 0}); }
+  script: null, edge: -1, goal: -1, opNode: -1, waitT: 0, bad: -1, badT: 0, throwT: 0, dodgeT: 0});
+export function resetAI(a) { Object.assign(a, {move: 0, crouch: false, targetAng: .2, holdUp: 0, slideSeen: false, slideIn: -1, plan: null, wild: 0, script: null, edge: -1, goal: -1, opNode: -1, waitT: 0, bad: -1, badT: 0, throwT: 0, dodgeT: 0}); }
 
 function aimAt(me, pt) { const sh = me.P.sh; return clamp(Math.atan2(-(pt.y - sh.y), (pt.x - sh.x) * me.face), ANG_MIN, ANG_MAX); }
 
@@ -49,6 +53,7 @@ export function aiStep(S, p, dt) {
   const on = nodeAt(navFor(map), op); if (on >= 0) A.opNode = on;
   const scripted = runScript(me, i, A, map);
   if (!scripted) watchSlide(S, me, op, i, A, d, dt);
+  if (S.mode.powerups) powerTick(S, me, i, A, d, dt);
   if (A.t <= 0) { A.t = d.react * rand(S, .6, 1.4); think(S, me, op, i, A, d, map, scripted); }
   if (!scripted && !A.script) {
     if (A.edge >= 0) followEdge(me, op, A, map);
@@ -91,6 +96,7 @@ function think(S, me, op, i, A, d, map, scripted) {
     if (dist < 150 && Math.abs(op.y - me.y) < 90 && me.lungeCD <= 0 && random(S) < d.aggro * .5) { A.targetAng = aimAt(me, tg); i.buf.attack = .1; }
     return;
   }
+  if (S.mode.powerups && powerDecision(S, me, op, i, A, d, map, dist)) return;
   // Not within reach: get to where they are (or wait for them across a pit).
   // (standing on different ledges or floors counts as out of reach unless very close)
   const nav = navFor(map), mn = nodeAt(nav, me), on = nodeAt(nav, op);

@@ -4,7 +4,7 @@
 import {
   DT, GRAV, JUMP_V, DJUMP_V, RUN_MAX, CROUCH_MAX, RUN_ACC, AIR_ACC,
   GROUND_FRIC, AIR_FRIC, DASH_V, DASH_T, DASH_CD, SLIDE_T, SLIDE_V, BLADE, ARM, ANG_MIN, ANG_MAX,
-  MOUSE_TURN, AIM_DEADZONE, BEAT_SPEED,
+  MOUSE_TURN, AIM_DEADZONE, BEAT_SPEED, SWIFT_RUN, SWIFT_DASH_CD, AIR_DASHES, AIR_DASH_CD,
 } from './constants.js';
 import {clamp, lerp, ik} from './util.js';
 import {emit} from './events.js';
@@ -17,13 +17,14 @@ export function mkFighter(id, x, y, face) {
     slideT: 0, dashT: 0, dashCD: 0, airDash: true, airJump: true, wallSide: 0, wallT: 0, coyote: 0, dropT: 0, speedT: 0, padUp: false,
     grip: 1, rope: -1, ropeCD: 0, climbing: false, // grip of the ground underfoot (ice is low); rope: index of the rope held, or -1
     angle: .18, deflect: 0, lunge: null, lungeCD: 0, stunT: 0, noLethal: 0, beatT: 0, beatCD: 0, swingLock: false, alive: true, phase: 0,
+    power: null, blade: BLADE, knife: false, airDashN: 0, // power-up held (powerups.js), blade length, knife ready, air dashes used this jump
     P: null, prevHand: null, prevTip: null, tipSpeed: 0, swingSpeed: 0, swingRate: 0, prevAng: null, angSpd: 5.2,
   };
 }
 
 // The per-player input record the simulation reads. Held keys are true/false;
 // `buf` remembers recent presses for a short time; `aim` is a mouse target or null.
-export const mkInput = () => ({left: false, right: false, up: false, down: false, raise: false, lower: false, aim: null, buf: {up: 0, down: 0, attack: 0, dash: 0}});
+export const mkInput = () => ({left: false, right: false, up: false, down: false, raise: false, lower: false, aim: null, buf: {up: 0, down: 0, attack: 0, dash: 0, throw: 0}});
 
 // Work out every joint position from the fighter's state.
 export function pose(f) {
@@ -57,7 +58,7 @@ export function pose(f) {
   const a = f.angle + f.deflect, dx = Math.cos(a) * s, dy = -Math.sin(a);
   const hand = {x: sh.x + dx * armLen, y: sh.y + dy * armLen};
   const elbow = ik(sh, hand, 15, 15, s);
-  const tip = {x: hand.x + dx * BLADE, y: hand.y + dy * BLADE};
+  const tip = {x: hand.x + dx * f.blade, y: hand.y + dy * f.blade};
   const thrusting = L && L.t > .05 && L.t < .2;
   // the back hand holds the rope while hanging (the rope is 5 px in front of the body)
   const bHand = f.rope >= 0 ? {x: f.x + s * 5, y: sh.y - 22} : {x: sh.x - s * 16, y: sh.y + (thrusting ? -6 : 12)};
@@ -96,7 +97,7 @@ export function finishPose(f, flipped) {
   const a = f.angle;
   if (f.prevAng === null) f.prevAng = a; else if (flipped) f.prevAng = Math.PI - f.prevAng;
   f.swingRate = (a - f.prevAng) / DT; // rad/s, + = blade rising
-  f.swingSpeed = Math.abs(f.swingRate) * (ARM + BLADE);
+  f.swingSpeed = Math.abs(f.swingRate) * (ARM + f.blade);
   f.prevAng = a;
   // after landing a beat the swing can't kill until it slows down (see combat.js)
   if (f.swingLock && f.swingSpeed < BEAT_SPEED) f.swingLock = false;
@@ -155,11 +156,16 @@ export function updateFighter(f, i, o, dt, map) {
   if (f.rope >= 0 && hang(f, i, dir, map, dt)) { turnBlade(f, i, stunned, dt); finishPose(f, flipped); return; }
   f.climbing = false;
 
-  // dash (no direction held = backstep)
+  // dash (no direction held = backstep). One dash per jump, or AIR_DASHES with Air Dash.
   if (i.buf.dash > 0 && f.dashCD <= 0 && !stunned && (f.onGround || f.airDash)) {
     i.buf.dash = 0; const d = dir || -f.face; f.vx = d * DASH_V;
-    if (!f.onGround) { f.airDash = false; f.vy = Math.min(f.vy, 0) * .25; }
-    f.dashT = DASH_T; f.dashCD = DASH_CD; f.slideT = 0; sfx('dash'); puff(f.x, f.y - 4, 5);
+    f.dashCD = DASH_CD * (f.power === 'swift' ? SWIFT_DASH_CD : 1);
+    if (!f.onGround) {
+      f.vy = Math.min(f.vy, 0) * .25;
+      if (++f.airDashN >= (f.power === 'air' ? AIR_DASHES : 1)) f.airDash = false;
+      if (f.power === 'air') f.dashCD = AIR_DASH_CD;
+    }
+    f.dashT = DASH_T; f.slideT = 0; sfx('dash'); puff(f.x, f.y - 4, 5);
   }
 
   // down: slide when running fast, otherwise drop through a platform
@@ -171,12 +177,12 @@ export function updateFighter(f, i, o, dt, map) {
   // jump, wall jump, double jump
   if (i.buf.up > 0 && !stunned) {
     if (f.onGround || f.coyote > 0) { i.buf.up = 0; f.vy = -JUMP_V; f.onGround = false; f.coyote = 0; if (f.slideT > 0) { f.vx *= 1.12; f.slideT = 0; } sfx('jump'); puff(f.x, f.y - 3, 3); }
-    else if (f.wallT > 0) { i.buf.up = 0; f.vy = -720; f.vx = -f.wallSide * 440; f.wallT = 0; f.airDash = true; sfx('jump'); puff(f.x, f.y - 30, 3); }
+    else if (f.wallT > 0) { i.buf.up = 0; f.vy = -720; f.vx = -f.wallSide * 440; f.wallT = 0; f.airDash = true; f.airDashN = 0; sfx('jump'); puff(f.x, f.y - 30, 3); }
     else if (f.airJump) { i.buf.up = 0; f.airJump = false; f.vy = -DJUMP_V; sfx('jump'); puff(f.x, f.y, 3); }
   }
 
-  // running and friction (ice has low grip: slow to speed up, slow to stop; speed pads raise top speed)
-  const mf = stunned ? .35 : (recovering ? .5 : 1), boost = f.speedT > 0 ? SPEED_MULT : 1;
+  // running and friction (ice has low grip: slow to speed up, slow to stop; speed pads and Swift raise top speed)
+  const mf = stunned ? .35 : (recovering ? .5 : 1), boost = (f.speedT > 0 ? SPEED_MULT : 1) * (f.power === 'swift' ? SWIFT_RUN : 1);
   if (f.slideT > 0) { f.slideT -= dt; f.vx -= Math.sign(f.vx) * Math.min(Math.abs(f.vx), 520 * grip * dt); f.crouch = false; }
   else if (f.dashT > 0) { f.dashT -= dt; f.crouch = false; }
   else {

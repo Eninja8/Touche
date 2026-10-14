@@ -1,6 +1,6 @@
 // Blade-on-body hits, blade-on-blade clashes, parries and kills.
 
-import {DT, ARM, BLADE, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS, BEAT_SPEED, BEAT_RATIO, BEAT_KNOCK, BEAT_OPEN, BEAT_CD, BEAT_MEET} from './constants.js';
+import {DT, ARM, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS, BEAT_SPEED, BEAT_RATIO, BEAT_KNOCK, BEAT_OPEN, BEAT_CD, BEAT_MEET} from './constants.js';
 import {lerp, distPtSeg, distPtSegX} from './util.js';
 import {bodyParts, lungeActive} from './fighter.js';
 import {emit} from './events.js';
@@ -91,7 +91,7 @@ export function clash(S, A, B, pt) {
 }
 
 // World-space velocity of a blade's point from its swing alone (px/s).
-const swingVel = f => { const a = f.angle, v = f.swingRate * (ARM + BLADE); return {x: -f.face * Math.sin(a) * v, y: -Math.cos(a) * v}; };
+const swingVel = f => { const a = f.angle, v = f.swingRate * (ARM + f.blade); return {x: -f.face * Math.sin(a) * v, y: -Math.cos(a) * v}; };
 
 // Is F's swing a beat on V's blade? (See BEAT_* in constants.js.)
 export function isBeat(F, V) {

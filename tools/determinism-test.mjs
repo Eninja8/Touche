@@ -13,7 +13,7 @@ import {createGame, newMatch, step, snapshot} from '../src/sim/game.js';
 import {drain} from '../src/sim/events.js';
 import {bodyParts} from '../src/sim/fighter.js';
 import {distPtSeg} from '../src/sim/util.js';
-import {TIP_LETHAL, LETHAL} from '../src/sim/constants.js';
+import {TIP_LETHAL, LETHAL, BLADE} from '../src/sim/constants.js';
 import {isBeat} from '../src/sim/combat.js';
 
 const simDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/sim');
@@ -162,7 +162,7 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
     check(seen.includes('sfx:clash') && !seen.includes('beat') && G.F[0].beatCD > 0, `a second beat within the cooldown is only a normal clash (${G.F[0].beatCD.toFixed(2)} s of cooldown left)`);
   }
   // swinging back into a swing is a clash; a still or same-way blade gets beaten (fake fencers, both facing each other)
-  const fencer = (face, rate) => ({face, angle: 0, deflect: 0, swingRate: rate, swingSpeed: Math.abs(rate) * 100, beatCD: 0});
+  const fencer = (face, rate) => ({face, angle: 0, deflect: 0, swingRate: rate, swingSpeed: Math.abs(rate) * 100, beatCD: 0, blade: BLADE});
   check(!isBeat(fencer(1, 9.5), fencer(-1, -3)) && isBeat(fencer(1, 9.5), fencer(-1, 3)) && isBeat(fencer(1, 9.5), fencer(-1, 0)), 'meeting a swing with your own blade (300 px/s the other way) is a clash, not a beat');
 }
 

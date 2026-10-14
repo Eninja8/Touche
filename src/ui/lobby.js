@@ -13,9 +13,10 @@ const OPTIONS = {
   diff: {label: 'Difficulty', values: [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']]},
   map: {label: 'Map', values: [['round', 'Random each round'], ['match', 'Random each match'], ...Object.keys(MAPS).map(k => [k, MAPS[k].name])]},
   hazards: {label: 'Hazards', values: ON_OFF},
+  powerups: {label: 'Power-ups', values: ON_OFF},
   target: {label: 'First to', values: [[3, '3'], [5, '5'], [7, '7'], [10, '10']]},
 };
-const MODE_OPTIONS = {cpu: ['diff', 'map', 'hazards', 'target'], local: ['map', 'hazards', 'target'], online: ['map', 'hazards', 'target']};
+const MODE_OPTIONS = {cpu: ['diff', 'map', 'hazards', 'powerups', 'target'], local: ['map', 'hazards', 'powerups', 'target'], online: ['map', 'hazards', 'powerups', 'target']};
 const TITLES = {cpu: 'vs CPU', local: 'Local', online: 'Online'};
 
 // The lobby being shown: {mode, readOnly, values, rows, onStart, onBack, onChange}

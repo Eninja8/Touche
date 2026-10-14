@@ -19,6 +19,7 @@ export default {
   platforms: [{x: 80, y: 480, w: 140, look: 'rock'}, {x: 1480, y: 480, w: 140, look: 'rock'}, {x: 640, y: 575, w: 150, look: 'hut'}, {x: 910, y: 575, w: 150, look: 'hut'}],
   ropes: [{x: 515, y0: 300, y1: 560, look: 'rope', tree: -1}, {x: 1185, y0: 300, y1: 560, look: 'rope', tree: 1}],
   spawns: [{x: 710, y: ICE, face: 1}, {x: 990, y: ICE, face: -1}],
+  items: [{x: 715, y: 575}, {x: 985, y: 575}, {x: 150, y: 480}, {x: 1550, y: 480}, {x: 200, y: 620}, {x: 1500, y: 620}], // power-up spots, in mirrored pairs
   colors: {
     light: {sky: '#dbe8f3', skyLow: '#c6d9ea', floor: '#d4e6f3', platform: '#a7c6dc', line: '#1d3347', accent: '#3a7bb0'},
     dark: {sky: '#0d1520', skyLow: '#15243a', floor: '#1f3850', platform: '#2f5470', line: '#d8ecfa', accent: '#7cc4f2'},

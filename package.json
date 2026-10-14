@@ -9,6 +9,6 @@
   "type": "module",
   "scripts": {
     "start": "node tools/serve.mjs",
-    "test": "node tools/determinism-test.mjs && node tools/maps-test.mjs && node tools/netcode-test.mjs"
+    "test": "node tools/determinism-test.mjs && node tools/maps-test.mjs && node tools/powerups-test.mjs && node tools/netcode-test.mjs"
   }
 }

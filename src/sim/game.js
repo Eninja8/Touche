@@ -15,17 +15,19 @@ import {rand, random} from './rng.js';
 import {getMap, MAPS, MAP_KEYS, DEFAULT_MAP} from './maps.js';
 import {hazardHit, pushX} from './terrain.js';
 import {emit} from './events.js';
+import {resetPowerups, updatePowerups, throwKnife, updateKnives} from './powerups.js';
 
 // A brand-new game state with nothing carried over.
 function freshState(seed) {
   return {
     tick: 0, rng: seed | 0, map: DEFAULT_MAP,
-    mode: {demo: true, vsCPU: false, online: false, diff: 'normal', target: 5, hazards: true, mapPick: null},
+    mode: {demo: true, vsCPU: false, online: false, diff: 'normal', target: 5, hazards: true, powerups: false, mapPick: null},
     phase: 'countdown', // countdown → fight → ko → (next round) … → over
     timer: 0,           // ticks spent in the current phase (countdown / ko)
     round: 0,           // round number within the current match (online play uses it to stay in step)
     scores: [0, 0], koWho: null, clashCD: 0, hitstop: 0, demoRounds: 0,
     F: [null, null], inp: [mkInput(), mkInput()], AI: [mkAI(), mkAI()],
+    item: null, itemT: 0, knives: [], // power-ups: the one on the map, ticks until the next, knives in flight
   };
 }
 
@@ -42,7 +44,8 @@ export const snapshot = S => structuredClone(S);
 export const isAI = (S, p) => S.mode.demo || (p === 1 && S.mode.vsCPU);
 
 // Start the menu exhibition bout, or a real match.
-// opts: {demo, vsCPU, online, diff, target, seed, map, hazards}
+// opts: {demo, vsCPU, online, diff, target, seed, map, hazards, powerups}
+// (Power-ups are off unless opts.powerups is true.)
 // map: a map name, or 'match' (a random map for the whole match) or 'round' (a new random
 // map every round). The random picks use the match seed, so online both computers agree.
 export function newMatch(S, opts) {
@@ -51,7 +54,7 @@ export function newMatch(S, opts) {
   for (const k of Object.keys(S)) delete S[k];
   Object.assign(S, freshState(opts.seed));
   const pick = opts.map === 'match' || opts.map === 'round' ? opts.map : null;
-  S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, online: !!opts.online, diff: opts.diff || 'normal', target: opts.target || 5, hazards: opts.hazards !== false, mapPick: pick};
+  S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, online: !!opts.online, diff: opts.diff || 'normal', target: opts.target || 5, hazards: opts.hazards !== false, powerups: opts.powerups === true, mapPick: pick};
   S.map = pick ? pickMap(S) : MAPS[opts.map] ? opts.map : DEFAULT_MAP;
   if (S.mode.demo) { S.AI[0].diff = S.AI[1].diff = 'normal'; }
   else S.AI[1].diff = S.mode.diff;
@@ -72,6 +75,7 @@ function startRound(S) {
   for (const f of S.F) finishPose(f);
   for (const i of S.inp) { for (const k in i.buf) i.buf[k] = 0; }
   for (const a of S.AI) { resetAI(a); a.t = rand(S, .2, .5); }
+  resetPowerups(S, m);
   S.phase = 'countdown'; S.timer = 0; S.koWho = null; S.hitstop = 0; S.round++;
   emit('roundStart', {map: S.map, name: m.name});
 }
@@ -99,7 +103,7 @@ function endRound(S) {
 }
 
 // Copy a human's command for this tick into their input record.
-// cmd = {held: {left,right,up,down,raise,lower}, presses: ['attack', ...], aim: {x,y} | null}
+// cmd = {held: {left,right,up,down,raise,lower}, presses: ['attack', 'throw', ...], aim: {x,y} | null}
 // aim is the mouse crosshair's offset from the shoulder. It is rounded to whole
 // pixels here, so every machine sees exactly the same value ("|| 0" turns minus
 // zero into plain zero; see codec.js).
@@ -160,6 +164,18 @@ export function step(S, cmds) {
     if (k1) kill(b, h1); if (k2) kill(a, h2);
     if (k1 || k2) roundOver(S, k1, k2);
     else { if (h1) bladePush(a, b, map); if (h2) bladePush(b, a, map); }
+  }
+
+  // power-ups: pickups, throwing the knife, knives in flight (powerups.js)
+  if (S.mode.powerups && live) {
+    for (let p = 0; p < 2; p++) {
+      const f = S.F[p], i = S.inp[p];
+      if (i.buf.throw > 0 && (!f.knife || !f.alive)) i.buf.throw = 0; // a throw with no knife is just ignored
+      if (i.buf.throw > 0 && f.stunT <= 0) { i.buf.throw = 0; throwKnife(S, f); }
+    }
+    if (S.phase === 'fight') updatePowerups(S, map);
+    const hit = updateKnives(S, map, dt, S.phase === 'fight' && a.alive && b.alive);
+    if (hit) roundOver(S, hit === b, hit === a);
   }
 
   // spikes: a touch for the opponent; both at once = coup double

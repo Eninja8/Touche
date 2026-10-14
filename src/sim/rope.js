@@ -27,7 +27,7 @@ export function tryGrab(f, map, prevX, held) {
     if (r.x < Math.min(prevX, f.x) - REACH || r.x > Math.max(prevX, f.x) + REACH) continue;
     const hands = f.y - GRIP;
     if (hands + 40 < r.y0 || hands - 20 > r.y1) continue;
-    f.rope = k; f.vx = 0; f.vy = 0; f.slideT = 0; f.dashT = 0; f.airJump = true; f.airDash = true; f.wallT = 0;
+    f.rope = k; f.vx = 0; f.vy = 0; f.slideT = 0; f.dashT = 0; f.airJump = true; f.airDash = true; f.airDashN = 0; f.wallT = 0;
     f.y = Math.min(Math.max(f.y, ropeTop(r)), ropeBottom(r)); f.x = r.x - f.face * 5;
     emit('sfx', {name: 'grab'});
     return;

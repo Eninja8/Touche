@@ -1,8 +1,8 @@
 // Packs one player's command for one tick into a tiny array for the network:
 //   [bits]          keyboard aiming
 //   [bits, ax, ay]  mouse aiming (ax, ay = whole-pixel offset from the shoulder)
-// bits 0-5 = held keys (left right up down raise lower), bits 6-9 = presses
-// (up down attack dash). Rounding and clamping happen here, before anything is
+// bits 0-5 = held keys (left right up down raise lower), bits 6-10 = presses
+// (up down attack dash throw). Rounding and clamping happen here, before anything is
 // simulated, so both computers always feed the simulation identical numbers.
 // "|| 0" turns minus zero into plain zero: the network can't send minus zero,
 // and Math.atan2 gives opposite answers for 0 and -0, which caused a desync.
@@ -10,8 +10,8 @@
 import {AIM_REACH} from '../sim/constants.js';
 import {clamp} from '../sim/util.js';
 
-const HELD = ['left', 'right', 'up', 'down', 'raise', 'lower'], TAPS = ['up', 'down', 'attack', 'dash'];
-const PRESS_BITS = 0b1111 << 6;
+const HELD = ['left', 'right', 'up', 'down', 'raise', 'lower'], TAPS = ['up', 'down', 'attack', 'dash', 'throw'];
+const PRESS_BITS = 0b11111 << 6;
 
 export const EMPTY = [0];
 

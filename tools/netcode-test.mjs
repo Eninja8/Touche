@@ -29,6 +29,7 @@ function script(p, f) {
   if (h < .03) presses.push('attack');
   if (h > .99) presses.push('dash');
   if (h > .5 && h < .52) presses.push('up');
+  if (h > .7 && h < .705) presses.push('throw');
   const aim = {x: 140 * Math.cos(f / (30 + 9 * p)), y: -50 + 80 * Math.sin(f / 17)};
   return encode({held, presses, aim});
 }
@@ -86,6 +87,7 @@ for (const net of [
   {name: 'good connection (30 ms, light jitter)', ticks: 3000, delay: 4, jitter: 2, loss: 0, hiccup: 0, seed: 1},
   {name: 'bad connection (100 ms, heavy jitter, 10% loss, slow frames)', ticks: 3000, delay: 12, jitter: 10, loss: .1, hiccup: .05, seed: 2},
   {name: 'lag spike territory (200 ms: players must stall and wait)', ticks: 1500, delay: 24, jitter: 6, loss: .02, hiccup: 0, seed: 3},
+  {name: 'power-ups on, random maps (100 ms, 5% loss)', ticks: 6000, delay: 12, jitter: 8, loss: .05, hiccup: .02, seed: 5, match: {...MATCH, map: 'round', hazards: true, powerups: true}},
   {name: 'random map each round, hazards on (100 ms, 5% loss)', ticks: 6000, delay: 12, jitter: 8, loss: .05, hiccup: .02, seed: 4, match: {...MATCH, map: 'round', hazards: true}},
 ]) {
   const [a, b] = runNetwork(net), ref = reference(net.ticks, net.match);

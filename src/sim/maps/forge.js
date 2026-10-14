@@ -22,6 +22,7 @@ export default {
   ],
   ropes: [{x: 560, y0: 40, y1: 590, look: 'chain', lamp: 'hook'}, {x: 1140, y0: 40, y1: 590, look: 'chain', lamp: 'hook'}],
   spawns: [{x: 710, y: FLOOR, face: 1}, {x: 990, y: FLOOR, face: -1}],
+  items: [{x: 185, y: 450}, {x: 1515, y: 450}, {x: 410, y: 600}, {x: 1290, y: 600}, {x: 680, y: 300}, {x: 1020, y: 300}], // power-up spots, in mirrored pairs
   colors: {
     light: {sky: '#e9d8c6', skyLow: '#d9b08c', floor: '#6d5a4f', platform: '#4a3b33', line: '#1f1410', accent: '#ff7a1a'},
     dark: {sky: '#140c0a', skyLow: '#2b1510', floor: '#3a2a24', platform: '#55403a', line: '#f5e1d0', accent: '#ff8a2a'},

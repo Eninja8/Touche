@@ -1,25 +1,59 @@
 # Touché dev log
 
 ## Current state
-- **Maps:** Hall, Open Hall (ring-out), Frozen Lake (ice, ring-out), Rooftops (gaps, open ends), Dojo (small, low ceiling, wall pieces), Forge (jump and speed pads). Lobby: Map (a map, Random each round, Random each match) and Hazards (On/Off).
+- **Maps:** Great Hall, Rooftops, Forge (jump and speed pads), Frozen Lake (ice), Dojo. Solid-block maps with spiked pits, spike strips and ropes/chains/ladders; follow camera. Lobby: Map (a map, Random each round, Random each match), Hazards (On/Off), Power-ups (On/Off).
+- **Readability:** every map uses the shared edge rim (`src/view/edges.js`) and danger look (`src/view/hazards.js`): backgrounds hazed back, solid edges outlined with a top highlight, pits are a dark void lit red-orange from below with warning lips, all spikes pale with glowing orange-red tips. Pickups are gold so they never look like danger.
+- **Power-ups** (`src/sim/powerups.js`, numbers in `constants.js`): one waits on the map at the start of each round, another appears `POWER_AGAIN` = 7 s after it's taken, at the map's mirrored `items` spots. Held until the round ends. **Swift:** run x`SWIFT_RUN` = 1.3, dash recovery x`SWIFT_DASH_CD` = 0.6. **Long Blade:** `LONG_BLADE` = 106 px (normal 76). **Air Dash:** `AIR_DASHES` = 3 per jump, `AIR_DASH_CD` = 0.25 s between them. **Knife:** one throw (Throw key: R for Red, P for Green, middle mouse), `KNIFE_V` = 1050 px/s with `KNIFE_GRAV` = 450, kills on any touch, blocked by a blade in its path. CPU (`src/sim/ai-power.js`; per difficulty `grab`, `throw`, `lead`, `dodge` in `DIFF`) goes for pickups when you're out of reach, throws when lined up, dodges or blocks knives.
+- **Ropes:** climb `CLIMB_UP` = 240 px/s, `CLIMB_DOWN` = 375 px/s.
 - **Menus:** Main (Play, Settings, corner fullscreen + mute icons) → Play (Online, vs CPU, Local) → a lobby with the match options (remembered per mode) → Start. Online: Host shows a room code and editable options; the joiner sees them read-only; both click Ready (which grabs the mouse); the host presses Start. Keyboard: arrows move, Left/Right change options, Enter picks, Esc goes back.
 - **Playable:** online 1v1 with room codes (rollback netcode over PeerJS), local 2-player (Red on mouse + keyboard, Green on keyboard), vs CPU (easy/normal/hard), menu demo bout, settings with key rebinding, sound, ragdoll deaths. Fixed 120 Hz simulation.
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
 - **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove. **Beats:** a blade swung at `BEAT_SPEED` = 450 px/s or more into a blade moving at most `BEAT_RATIO` = 0.5 of that is knocked `BEAT_KNOCK` = 1.3 rad wide and harmless for `BEAT_OPEN` = 0.35 s. The beating swing can't kill until it slows below `BEAT_SPEED`; the same player can't beat again for `BEAT_CD` = 0.6 s; a blade swinging back into the beat at `BEAT_MEET` = 200 px/s or more makes it a normal clash.
-- **Next:** owner playtests Phase C. Then Phase D (power-ups), stopping after each for a playtest.
+- **Next:** owner playtests the readability pass and Phase D (power-ups).
 
 ## Roadmap
 1. Online 1v1 with room codes (built; being playtested).
 2. Phase A: menus and UI cleanup (done).
 3. Phase B: combat tuning (done).
-4. Phase C: maps and hazards (built; being playtested).
-5. Phase D: power-ups (Swift, Long Blade, Air Dash, Throwing Knife; Power-ups on/off).
+4. Phase C: maps and hazards (done; C2 playtested, readability pass built).
+5. Phase D: power-ups (built; being playtested).
 6. Controller support (Gamepad API). Not started.
 7. On hold until online has been tested with a friend: Windows EXE (Steam/Electron) with Steam lobbies and invites, and a relay server.
 
+## Ideas for later (not built)
+Inspired by Nidhogg. Notes on how each fits or clashes with our free mouse-aimed blade:
+- **Flips or somersaults when jumping.** Fits easily as style: the body could spin in the view only, while the blade keeps pointing where the mouse aims (aim is already in world space, so a spinning body needn't move the blade). A dodge (smaller body mid-flip) would be a sim change and could make touches harder to read; start cosmetic.
+- **Stance heights (high/mid/low); matching blocks, switching height can disarm.** Clashes most: Nidhogg's stances are three fixed positions, ours is a free angle. Matching already blocks (blades are solid). Could be adapted by reading the angle as three bands, with a disarm as a stronger beat (a fast switch through their blade while both are in the same band). Needs the unarmed idea below to mean anything.
+- **Throw your sword, fight unarmed (punch/kick), pick a sword back up.** The Knife power-up is a first taste. Aiming a sword throw with the mouse fits well. Unarmed fighting needs a new attack set and animations, and dropped swords would have to move from the view (cosmetic now) into the sim as pickups. Big change; fine for rollback.
+- **Dive kick and roll.** A dive kick (attack while falling with the blade down, or down + thrust in the air) fits the keys; it could knock down or disarm instead of killing. A roll overlaps with our slide; maybe a short dodge-roll that ducks under a high blade. Mouse buttons are all used (thrust, dash, throw), so these would be key combos.
+- **Tug-of-war mode: push across screens toward a goal.** Fits the follow camera and the room-sized maps: a long map of several screens, the last fencer to score gets the right of way and runs toward their goal, the other respawns ahead. Needs mid-round respawns, a new win rule and long maps (the CPU's route graph already works per map). The most work, and the most distinctive.
+
 ## Session log
+
+### 2026-10-14 — History cleanup, readability pass, ropes, Phase D (power-ups)
+- **Git history scrubbed** (owner approved): the throwaway browser profile and 14 screenshots from the Phase C commit were removed from every commit with `git filter-branch`, the now-empty "remove by mistake" commit was dropped, and main was force-pushed. Local repo 42.6 MB to 222 KB; a fresh clone is 311 KB with 20 commits and none of those files. GitHub's own size figure still said 42.8 MB right after the push (GitHub recalculates it later). Live site checked after the push: page and scripts load. A backup bundle of the old history was kept outside the repo.
+- **Phase C2 playtest feedback** (owner): camera, ice and CPU good. Ropes good but a bit slow. Readability most important: walls/floors/platforms must stand out from backgrounds (Frozen Lake's left wall looked like background), pits must be obvious, hazards need one danger look.
+- **Ropes:** climbing up 190 to 240 px/s, down 300 to 375 px/s (+25%), climbing animation sped up to match.
+- **Readability pass** (`src/view/edges.js`, `src/view/hazards.js`):
+  - Backgrounds get a haze (black at 42% at night, the sky colour at 40% by day) so they recede.
+  - Every edge of every solid block that faces open air gets an outline, with a thicker edge and a light highlight on top surfaces. Platforms get the same top edge plus a soft shadow.
+  - Pits: a near-black void, lit red-orange from the spikes at the bottom, down past the bottom of the map; orange-red warning lips with hazard stripes on both floor edges (skipped beside a wall).
+  - Spikes, the Forge catwalk spikes and icicles all share one look: pale blades with dark outlines, glowing orange-red tips, a pulsing glow behind the strip and a base bar.
+  - Hazards off: a covered pit is painted as the floor next to it (with the boards on top), so safe floor never looks like a hole.
+  - *Bug fixed:* Frozen Lake's rock overhangs were drawn 300 px taller than they are, so open air under them looked like rock wall (the spot the owner noticed).
+  - Checked with screenshots of all five maps in light and dark mode at the camera's widest zoom, plus close-ups and hazards-off views.
+- **Phase D, power-ups** (see Current state for the numbers):
+  - Design: one pickup at a time at mirrored spots on ledges and platforms; walking through it takes it; one power per fencer, replaced by the next, gone at the round's end.
+  - First version spawned the first pickup 3 s into a round. CPU-vs-CPU rounds last about 1.2 s, so it rarely appeared; now one is already waiting during the countdown.
+  - New Throw key (R / P / middle mouse), rebindable in Settings; it's bit 10 of the network input. Lobby option Power-ups (On by default; the host's choice applies online). The menu demo bout uses power-ups. How to play mentions them.
+  - Drawing (`src/view/items.js`): a bobbing gold token with an icon (bolt, sword, wing, dagger), a small icon over the holder's head, knives with a streak in the thrower's colour, a gold burst and chime on pickup, a whoosh on throw. Dropped swords keep their length (long blades stay long).
+  - Tests (`tools/powerups-test.mjs`, in `npm test`): power-up bouts on every map are deterministic and rewind correctly; spots are on solid ground, off spikes, mirrored; a pickup waits at round start and the next comes 7 s after; Swift 351 px/s vs 270; Long Blade 106 px; Air Dash 3 dashes vs 1; a thrown knife kills; a blade in its path blocks it; no knife, no throw; Power-ups Off spawns nothing. The CPU picked up about 28 power-ups and threw about 4 knives across five 67-second CPU-vs-CPU bouts. New netcode run with power-ups on (100 ms, 5% loss, scripted throws): both players agree.
+  - Browser: the game's renderer drew a power-up fight (pickup, held icons, knife in flight) with no errors; the menu and demo load with no errors. Not yet checked by eye in a real match: that's the owner's playtest.
+- Online version 9 (covers both the rope change and power-ups).
+- `npm test` all passing.
+
 
 ### 2026-10-14 — Phase C2: hazards, bigger maps, camera, ropes
 - Ring-out removed. Hazards are spiked pits and spike strips (touch = point for the opponent; both = coup double). Hazards Off removes spikes and floors over pits.
@@ -198,4 +232,4 @@ Owner's request: fencers could walk into each other and the point passed through
   - `src/net/online.js` had grown past the file-size rule (391 lines), so it's now three files: `online.js` (lobby, messages, leaving), `match.js` (match flow, rollback loop, KOs, rematches) and `state.js` (shared state).
   - The map tests moved to `tools/maps-test.mjs` (part of `npm test`).
   - Two-window tests re-run after the split: Ready flow, a match at about 93 ms with 2% loss, rematch, disconnect and the mouse grab all behave the same, with no errors.
-- *Mistake fixed:* a local test run started from the project folder put a throwaway browser profile (67 MB, a fresh headless profile used only on localhost) and 14 map screenshots into the Phase C commit, which was pushed. They were removed in the next commit and are now ignored by `.gitignore`. They are still in the git history.
+- *Mistake fixed:* a local test run started from the project folder put a throwaway browser profile (67 MB, a fresh headless profile used only on localhost) and 14 map screenshots into the Phase C commit, which was pushed. They were removed in the next commit and are now ignored by `.gitignore`. (Scrubbed from the git history on 2026-10-14; see that day's history cleanup entry.)

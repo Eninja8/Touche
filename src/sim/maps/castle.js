@@ -20,6 +20,7 @@ export default {
     {x: 880, y0: 40, y1: 330, look: 'chain', lamp: 'chandelier'},
   ],
   spawns: [{x: 740, y: FLOOR, face: 1}, {x: 1020, y: FLOOR, face: -1}],
+  items: [{x: 690, y: 580}, {x: 1070, y: 580}, {x: 170, y: 520}, {x: 1590, y: 520}, {x: 540, y: 710}, {x: 1220, y: 710}], // power-up spots, in mirrored pairs
   colors: {
     light: {sky: '#d9d3c8', skyLow: '#c9bfae', floor: '#a49a8a', platform: '#7a6e5f', line: '#1e1a16', accent: '#b8322a'},
     dark: {sky: '#11131c', skyLow: '#1a1c27', floor: '#2b2a31', platform: '#3f3c45', line: '#ece6dc', accent: '#ff6b4a'},

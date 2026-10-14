@@ -4,7 +4,7 @@
 // None of this affects gameplay, so it lives outside the simulation and may use
 // Math.random. It reacts to events from the sim and is updated once per tick.
 
-import {DT, GRAV, BLADE} from '../sim/constants.js';
+import {DT, GRAV} from '../sim/constants.js';
 import {getMap} from '../sim/maps.js';
 import {lerp} from '../sim/util.js';
 import {lungeActive} from '../sim/fighter.js';
@@ -30,6 +30,8 @@ function splat(x, y, r, side) { dctx.fillStyle = C.blood; dctx.globalAlpha = .85
 
 export function sparks(x, y, n, tag, color) { for (let k = 0; k < n; k++) { const a = rnd(0, Math.PI * 2), s = rnd(150, 620); fx.push({type: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: rnd(.15, .32), max: .32, tag, color}); } }
 // A beat: a quick ring plus pale streaks, so it reads differently from a normal clash.
+// A power-up taken: a gold burst.
+export function pickupFx(x, y) { for (let k = 0; k < 3; k++) fx.push({type: 'ring', x, y, life: .2 + k * .08, max: .2 + k * .08}); sparks(x, y, 14, undefined, '#ffd84a'); }
 export function beatFx(x, y) { fx.push({type: 'ring', x, y, life: .22, max: .22}); sparks(x, y, 10, undefined, C.ink); }
 function blood(x, y, vx, vy, n, tag) { const sp = Math.hypot(vx, vy) || 1; for (let k = 0; k < n; k++) { const s = rnd(.15, .65); fx.push({type: 'blood', x, y, vx: vx / sp * Math.min(sp, 900) * s + rnd(-160, 160), vy: vy / sp * Math.min(sp, 900) * s + rnd(-320, 60), life: 3, max: 3, size: rnd(1.6, 4), tag}); } }
 export function puff(x, y, n) { for (let k = 0; k < n; k++) fx.push({type: 'puff', x: x + rnd(-8, 8), y, vx: rnd(-90, 90), vy: rnd(-50, -10), life: rnd(.25, .4), max: .4, size: rnd(3, 6)}); }
@@ -60,7 +62,7 @@ export function onKill(f, hit, provisional) {
   const cons = RAG_LINKS.filter((l, j) => !(decap && j === 0)).map(([a, b]) => ({a, b, len: Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y)}));
   ragdolls.push({pts, cons, id: f.id, face: f.face, tag});
   const hv = {x: (P.hand.x - f.prevHand.x) / DT, y: (P.hand.y - f.prevHand.y) / DT};
-  swords.push({a: {x: P.hand.x, y: P.hand.y, px: P.hand.x - (hv.x + rnd(-150, 150)) * DT, py: P.hand.y - (hv.y - 200) * DT}, b: {x: P.tip.x, y: P.tip.y, px: P.tip.x - (hv.x + rnd(-400, 400)) * DT, py: P.tip.y - (hv.y - rnd(100, 400)) * DT}, id: f.id, tag});
+  swords.push({a: {x: P.hand.x, y: P.hand.y, px: P.hand.x - (hv.x + rnd(-150, 150)) * DT, py: P.hand.y - (hv.y - 200) * DT}, b: {x: P.tip.x, y: P.tip.y, px: P.tip.x - (hv.x + rnd(-400, 400)) * DT, py: P.tip.y - (hv.y - rnd(100, 400)) * DT}, len: Math.hypot(P.tip.x - P.hand.x, P.tip.y - P.hand.y), id: f.id, tag});
   if (settings.blood) blood(hit.p.x, hit.p.y, hit.vx, hit.vy, 28, tag); else sparks(hit.p.x, hit.p.y, 30, tag);
   view.shake = Math.max(view.shake, 13);
 }
@@ -125,7 +127,7 @@ export function updateFx(S, dt) {
     for (const k in r.pts) verletPoint(r.pts[k], dt);
     for (let it = 0; it < 5; it++) { for (const c of r.cons) satisfy(r.pts[c.a], r.pts[c.b], c.len); for (const k in r.pts) collidePoint(r.pts[k], k === 'head' ? 10 : 2.5, map); }
   }
-  for (const s of swords) { verletPoint(s.a, dt); verletPoint(s.b, dt); for (let it = 0; it < 4; it++) { satisfy(s.a, s.b, BLADE); collidePoint(s.a, 2, map); collidePoint(s.b, 1.5, map); } }
+  for (const s of swords) { verletPoint(s.a, dt); verletPoint(s.b, dt); for (let it = 0; it < 4; it++) { satisfy(s.a, s.b, s.len); collidePoint(s.a, 2, map); collidePoint(s.b, 1.5, map); } }
   for (let j = fx.length - 1; j >= 0; j--) {
     const p = fx[j]; p.life -= dt;
     if (p.type === 'spark') { p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }

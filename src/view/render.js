@@ -1,5 +1,5 @@
-// Draws one frame: the map, blood decals, ragdolls, fighters, particles, the map's
-// foreground, then callouts and the map name. Reads the game state but never changes it.
+// Draws one frame: the map, blood decals, ragdolls, the power-up, fighters, knives,
+// particles, the map's foreground, then callouts and the map name. Reads the game state but never changes it.
 // The arena is drawn through the follow camera (camera.js); text is drawn on top in
 // screen space, so it stays the same size whatever the zoom.
 
@@ -11,6 +11,7 @@ import {C, isDark} from './theme.js';
 import {fx, ragdolls, swords, looks, view, decals} from './fx.js';
 import {drawBack, drawFront} from './backdrops.js';
 import {cam, updateCamera, viewRect} from './camera.js';
+import {drawItem, drawHeld, drawKnives} from './items.js';
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d'), stage = document.getElementById('stage');
 function resize() {
@@ -137,7 +138,7 @@ function drawAimArrow(S, aim) {
 // What the camera keeps in view: each fencer (head to feet), or their body after a touch.
 function focusPoints(S) {
   const pts = [];
-  for (const f of S.F) if (f && f.alive && f.P) pts.push({x: f.x, y: f.y}, {x: f.P.head.x, y: f.P.head.y - 12});
+  for (const f of S.F) if (f && f.alive && f.P) pts.push({x: f.x, y: f.y}, {x: f.P.head.x, y: f.P.head.y - (f.power ? 38 : 12)});
   for (const r of ragdolls) pts.push({x: r.pts.hip.x, y: r.pts.hip.y + 40}, {x: r.pts.hip.x, y: r.pts.hip.y - 60});
   return pts;
 }
@@ -156,7 +157,9 @@ export function render(S, aim) {
   drawBack(ctx, map, v, dark, t); ctx.drawImage(decals, 0, 0, map.width, map.height);
   for (const r of ragdolls) drawRagdoll(r);
   for (const s of swords) drawSword(s);
+  drawItem(ctx, S, dark, t);
   for (let p = 0; p < 2; p++) drawFighter(S.F[p], looks[p]);
+  drawKnives(ctx, S); for (const f of S.F) drawHeld(ctx, f);
   drawFx(); if (aim && settings.aimIndicator === 'arrow') drawAimArrow(S, aim);
   drawFront(ctx, map, v, dark, t);
   ctx.restore();
