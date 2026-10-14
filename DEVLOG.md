@@ -75,13 +75,7 @@ Owner approved the online plan and PeerJS with its free public server.
 Owner's request: fencers could walk into each other and the point passed through bodies harmlessly.
 - *The point:* the outer 15% of the blade now kills when it's driven into the body at 250 px/s or more, measured along the blade (so running onto a point, or running a point into someone, kills; standing still or inching forward doesn't). The full run speed is 270 px/s, so a level blade at a run just counts. The rest of the blade still needs a 600 px/s swing; thrusts are still always lethal. A lethal contact anywhere on the blade wins over a harmless one.
 - *Solid blades:* a harmless contact shoves the body sideways out of the blade (away from the holder, unless only the other way clears it) and pushes the holder back by a quarter of the shove; whoever was moving into the blade loses that speed. This also runs on clash ticks, which stops blades staying inside bodies through the clash freeze-frame.
-- *Thresholds* (all in ): , , ,  (px per tick), .
+- *Thresholds* (all in `src/sim/constants.js`): `LETHAL = 600`, `TIP_LETHAL = 250`, `TIP_ZONE = 0.15`, `PUSH_MAX = 24` (px per tick), `PUSH_HOLDER = 0.25`.
 - *Measured* over 20 CPU-vs-CPU bouts (11 minutes of fighting): ticks with a blade visibly inside a body went from 1,638 to 7 (one 3 px moment during a double-thrust clash). Touches per minute are about the same; about three quarters are now point touches.
-- *Tests:* new checks in Unknown command: "test"
-
-
-Did you mean this?
-  npm test # Test a package
-To see a list of supported npm commands, run:
-  npm help: standing near the point is safe; inching onto it doesn't kill and the point never enters the body; a slow 520 px/s swing down through a body neither kills nor passes through (shoves it 45 px); running onto the point kills (266 px/s). Determinism and all three rollback network tests pass. Browser runs (vs CPU, 2-player) have no errors.
+- *Tests:* new checks in `npm test`: standing near the point is safe; inching onto it doesn't kill and the point never enters the body; a slow 520 px/s swing down through a body neither kills nor passes through (shoves it 45 px); running onto the point kills (266 px/s). Determinism and all three rollback network tests pass. Browser runs (vs CPU, 2-player) have no errors.
 - Online version bumped to 2, so an old cached copy can't play against the new rules.
