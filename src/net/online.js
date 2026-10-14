@@ -3,7 +3,8 @@
 // How a match runs:
 //  1. Lobby: the host gets a room code; the opponent joins with it. The host is
 //     Red (player 0), the joiner is Green (player 1). The host's lobby options
-//     are shown to the joiner. When the host presses Start, it picks the random
+//     are shown to the joiner. Both click Ready (grabbing the mouse); when the
+//     host then presses Start, it picks the random
 //     seed and sends it with the options, so both games start identical.
 //  2. Each round starts with a "ready" handshake, then runs with rollback
 //     (rollback.js): only inputs are sent, both computers simulate everything.
@@ -23,12 +24,12 @@ import {encode, decode, EMPTY} from './codec.js';
 import * as transport from './transport.js';
 import {settings} from '../ui/settings.js';
 import {sampleOnline, setOnlinePlayer, clearKeys} from '../ui/input.js';
-import {requestLock, releaseLock} from '../ui/mouse.js';
+import {requestLock, releaseLock, isLocked, onLockChange} from '../ui/mouse.js';
 import {showScreen, hideScreens, onBack} from '../ui/screens.js';
-import {openLobby, lobbyValues, setLobbyValues, setLobbyStatus, setLobbyError, setStartEnabled} from '../ui/lobby.js';
+import {openLobby, lobbyValues, setLobbyValues, setLobbyStatus, setLobbyError, setStartEnabled, setReadyButton} from '../ui/lobby.js';
 import {onKill, hasRagdoll, undoKill, confirmKills, updateFx} from '../view/fx.js';
 
-const PROTOCOL = 3;          // bump when online play or gameplay changes, so mismatched versions refuse to play
+const PROTOCOL = 4;          // bump when online play or gameplay changes, so mismatched versions refuse to play
 const TIMEOUT_MS = 5000;     // no message for this long = disconnected
 const PING_MS = 500, RESEND_MS = 300, STALL_NOTE_MS = 500;
 const IDLE = [decode(EMPTY), decode(EMPTY)];
@@ -42,10 +43,11 @@ const net = {
   lobby: null, link: null, me: 0, matchNo: 0,
   session: null, early: [],        // inputs that arrived before our round started
   peerReady: 0, lastPacket: null,  // last input packet, re-sent while waiting (in case it was lost)
-  acc: 0, slow: 0, syncWait: 0,
+  acc: 0, slow: 0, syncWait: 0, fake: '',
   rtt: 0, lastHeard: 0, lastPing: 0, lastHud: 0, lastResend: 0,
   ctlId: 1, unacked: new Map(), seen: new Set(),
   stallSince: null, kills: {}, rematch: {me: false, peer: false}, desync: false,
+  ready: {me: false, peer: false}, // lobby: who has clicked Ready
 };
 
 export const isActive = () => ['connected', 'wait', 'play', 'ko', 'over'].includes(net.phase);
@@ -69,6 +71,10 @@ export function initOnline(h) {
   onBack('netmsg', () => { $('netmsg').hidden = true; hooks.app.showMenu(); });
   // closing or reloading the page: tell the opponent straight away instead of letting them time out
   addEventListener('pagehide', () => { if (net.link) net.link.send(BYE); });
+  // losing the mouse in the lobby (Esc, alt-tab) un-readies you
+  onLockChange(locked => { if (!locked && net.phase === 'connected' && net.ready.me && settings.mouseAim) setReady(false); });
+  // with the mouse grabbed the cursor is hidden, so the host can click anywhere to Start
+  $('cv').addEventListener('mousedown', () => { if (net.phase === 'connected' && net.me === 0 && isLocked() && bothReady()) hostStart(); });
 }
 
 // ---------- lobby ----------
@@ -84,10 +90,10 @@ function openJoin() {
   showScreen('joinScreen', 'joinCode');
 }
 
-// Host: the lobby with the room code and editable match options. Start once someone joins.
+// Host: the lobby with the room code and editable match options. Start once both are ready.
 function hostMatch() {
-  openLobby('online', {code: true, onStart: hostStart, onBack: openOnlineMenu, onChange: sendLobby});
-  setStartEnabled(false); setLobbyStatus('Getting code…'); $('bcopy').focus({preventScroll: true});
+  openLobby('online', {code: true, onStart: hostStart, onReady: pressReady, onBack: openOnlineMenu, onChange: sendLobby});
+  setStartEnabled(false); $('bready').disabled = true; setLobbyStatus('Getting code…'); $('bcopy').focus({preventScroll: true});
   net.lobby = transport.host({
     onCode: code => { $('roomCode').textContent = code; setLobbyStatus('Waiting for opponent…'); },
     onConnect: link => connected(link, 0),
@@ -120,20 +126,43 @@ function connected(link, me) {
   link.onMessage(onMessage);
   link.onClose(() => disconnected('Opponent left.'));
   sendCtl({t: 'hello', v: PROTOCOL});
-  net.phase = 'connected';
-  if (me === 0) { setLobbyStatus('Opponent joined' + fakeNote(link)); setStartEnabled(true); sendLobby(lobbyValues()); $('bstart').focus({preventScroll: true}); }
-  else {
-    // the joiner sees the host's options, read-only, until the host presses Start
-    openLobby('online', {readOnly: true, values: {...settings.lobby.online}, onBack: openOnlineMenu});
-    setLobbyStatus('Waiting for host…' + fakeNote(link));
-  }
+  net.phase = 'connected'; net.ready = {me: false, peer: false};
+  if (me === 0) { $('bready').disabled = false; sendLobby(lobbyValues()); }
+  // the joiner sees the host's options, read-only, until the host presses Start
+  else openLobby('online', {readOnly: true, values: {...settings.lobby.online}, onReady: pressReady, onBack: openOnlineMenu});
+  net.fake = fakeNote(link);
+  showReady();
+  $('bready').focus({preventScroll: true});
+}
+
+// Ready: both players click it (which also grabs the mouse); then the host can Start.
+const bothReady = () => net.ready.me && net.ready.peer;
+function pressReady() {
+  if (net.phase !== 'connected') return;
+  if (net.ready.me) { setReady(false); releaseLock(); return; }
+  setLobbyError('');
+  if (!settings.mouseAim) { setReady(true); return; }
+  requestLock().then(() => setReady(true), () => setLobbyError('Click Ready again.'));
+}
+function setReady(on) {
+  if (net.ready.me === on) return;
+  net.ready.me = on; sendCtl({t: 'rdy', on}); showReady();
+}
+function showReady() {
+  setReadyButton(net.ready.me);
+  const them = net.ready.peer ? 'Opponent ready' : 'Opponent not ready';
+  if (net.me === 0) {
+    setStartEnabled(bothReady());
+    setLobbyStatus((bothReady() ? 'Click or press Enter to start' : them) + net.fake);
+    if (bothReady()) $('bstart').focus({preventScroll: true});
+  } else setLobbyStatus((net.ready.me && net.ready.peer ? 'Waiting for host to start…' : them) + net.fake);
 }
 
 // Host changed a lobby option: show it to the joiner.
 function sendLobby(v) { if (net.link && net.me === 0 && net.phase === 'connected') sendCtl({t: 'lobby', s: v}); }
 
 function hostStart() {
-  if (net.phase !== 'connected') return;
+  if (net.phase !== 'connected' || !bothReady()) return;
   if (settings.mouseAim) requestLock().catch(() => {});
   hostStartsMatch();
 }
@@ -300,6 +329,7 @@ function handleCtl(c) {
       if (settings.mouseAim) requestLock().catch(() => {}); // may need a click (Resume) if the browser refuses
       beginMatch(c); return;
     case 'lobby': if (net.me === 1) setLobbyValues(c.s); return;
+    case 'rdy': net.ready.peer = !!c.on; if (net.phase === 'connected') showReady(); return;
     case 'ready':
       net.peerReady = Math.max(net.peerReady, c.k);
       tryStartRound(); return;

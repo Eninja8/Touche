@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Touché</title>
-<meta name="description" content="Stick-figure fencing. One touch kills.">
+<meta name="description" content="Stick-figure fencing. En garde.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Barlow:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
@@ -28,7 +28,7 @@
     <div class="overlay" id="menu">
       <div class="panel">
         <h1 class="title">Touch<span class="acc">é</span></h1>
-        <p class="tag">One touch kills.</p>
+        <p class="tag">En garde.</p>
         <div class="btns col">
           <button class="btn" id="bplay" type="button">Play</button>
           <button class="btn ghost" id="bset1" type="button">Settings</button>
@@ -74,6 +74,7 @@
         <p class="hint" id="lobbyStatus" aria-live="polite"></p>
         <p class="note" id="lobbyError" aria-live="polite"></p>
         <div class="btns col">
+          <button class="btn ghost" id="bready" type="button" aria-pressed="false" hidden>Ready</button>
           <button class="btn" id="bstart" type="button">Start</button>
           <button class="btn ghost small" id="blobbyBack" type="button">Back</button>
         </div>

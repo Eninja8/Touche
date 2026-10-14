@@ -107,3 +107,4 @@ body:not(.menus) .corner{display:none}
 .icon.on .i-enter,.icon.on .i-sound{display:none}
 .icon.on .i-exit,.icon.on .i-muted{display:block}
 .btn:disabled{opacity:.4;cursor:default;filter:none}
+.btn.ghost[aria-pressed="true"]{background:var(--green);border-color:var(--green);color:var(--hall)}

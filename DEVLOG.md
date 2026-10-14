@@ -1,17 +1,17 @@
 # Touché dev log
 
 ## Current state
-- **Menus:** Main (Play, Settings, corner fullscreen + mute icons) → Play (Online, vs CPU, Local) → a lobby with the match options (remembered per mode) → Start. Online: Host shows a room code and editable options; the joiner sees them read-only; the host presses Start. Keyboard: arrows move, Left/Right change options, Enter picks, Esc goes back.
+- **Menus:** Main (Play, Settings, corner fullscreen + mute icons) → Play (Online, vs CPU, Local) → a lobby with the match options (remembered per mode) → Start. Online: Host shows a room code and editable options; the joiner sees them read-only; both click Ready (which grabs the mouse); the host presses Start. Keyboard: arrows move, Left/Right change options, Enter picks, Esc goes back.
 - **Playable:** online 1v1 with room codes (rollback netcode over PeerJS), local 2-player (Red on mouse + keyboard, Green on keyboard), vs CPU (easy/normal/hard), menu demo bout, settings with key rebinding, sound, ragdoll deaths. Fixed 120 Hz simulation.
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
 - **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove.
-- **Next:** owner playtests Phase A (menus). Then Phase B (combat tuning: CPU vs slides, beats), Phase C (maps and hazards), Phase D (power-ups), stopping after each for a playtest.
+- **Next:** owner playtests Phase B. Then Phase C (maps and hazards), Phase D (power-ups), stopping after each for a playtest.
 
 ## Roadmap
 1. Online 1v1 with room codes (built; being playtested).
-2. Phase A: menus and UI cleanup (built; being playtested).
+2. Phase A: menus and UI cleanup (done).
 3. Phase B: combat tuning (CPU reacts to slides; "beat" the blade away).
 4. Phase C: maps and hazards (Frozen Lake, Rooftops, Dojo, Forge; ring-out; Hazards on/off; speed and jump pads; random map options).
 5. Phase D: power-ups (Swift, Long Blade, Air Dash, Throwing Knife; Power-ups on/off).
@@ -95,3 +95,13 @@ Owner's request: fencers could walk into each other and the point passed through
 - *Keyboard:* every menu works with arrows (Up/Down move; Left/Right change an option, switch settings tabs or move between buttons), Enter picks, Esc goes back one screen (`src/ui/screens.js`). Typing a room code doesn't trigger game keys (M no longer mutes while typing).
 - The current map is now called "Hall".
 - *Checked:* `npm test` passes. Headless browser walkthrough of every screen by keyboard and mouse, starting a CPU match and pausing, with no errors. Two-window online test: the joiner saw the host change "First to" live, Start began the match on both, scores matched, the rematch worked, and closing one window showed "Opponent left." within 27 ms.
+
+**Phase A playtest feedback** (owner): menus feel good. Tagline changed to **"En garde."**
+
+**Online Ready button:**
+- Both players click **Ready** in the online lobby. That click also grabs the mouse (when mouse aiming is on), so nobody starts a match without it. If the browser refuses, the lobby says "Click Ready again."
+- The host's **Start** only lights up when both are ready, and greys out again if either player un-readies: by clicking Ready again, or by losing the mouse (Esc, alt-tab).
+- With the mouse grabbed the cursor is hidden, so the host can click anywhere (or press Enter) to start.
+- An Esc that just released the mouse no longer also counts as "back" in menus.
+- New `rdy` message; online version bumped to 4.
+- *Checked:* two-window test: Start stayed grey until both were ready, greyed out when the joiner un-readied, ignored clicks while grey, and the match plus rematch ran with matching scores. Mouse-grab test with real clicks: Ready grabbed the mouse on both windows; releasing it un-readied the joiner and greyed out Start; the host's click anywhere started the match with both mice still grabbed and no pause screen.

@@ -20,10 +20,10 @@ const TITLES = {cpu: 'vs CPU', local: 'Local', online: 'Online'};
 // The lobby being shown: {mode, readOnly, values, rows, onStart, onBack, onChange}
 let cur = null;
 
-// opts: {readOnly, values (joiner: the host's), code (show the room code row), onStart, onBack, onChange}
+// opts: {readOnly, values (joiner: the host's), code (show the room code row), onStart, onReady (online: show Ready), onBack, onChange}
 export function openLobby(mode, opts = {}) {
   const values = opts.values || settings.lobby[mode];
-  cur = {mode, readOnly: !!opts.readOnly, values, rows: [], onStart: opts.onStart, onBack: opts.onBack, onChange: opts.onChange};
+  cur = {mode, readOnly: !!opts.readOnly, values, rows: [], onStart: opts.onStart, onReady: opts.onReady, onBack: opts.onBack, onChange: opts.onChange};
   $('lobbyTitle').textContent = TITLES[mode];
   $('codeRow').hidden = !opts.code; $('roomCode').textContent = '····';
   const box = $('lobbyOpts'); box.textContent = '';
@@ -37,6 +37,7 @@ export function openLobby(mode, opts = {}) {
     box.appendChild(o.row); cur.rows.push(o);
   }
   $('bstart').hidden = !opts.onStart; $('bstart').disabled = false;
+  $('bready').hidden = !opts.onReady; setReadyButton(false);
   setLobbyStatus(''); setLobbyError('');
   showScreen('lobby', opts.onStart ? 'bstart' : 'blobbyBack');
 }
@@ -47,9 +48,12 @@ export function setLobbyValues(v) { if (!cur) return; Object.assign(cur.values, 
 export function setLobbyStatus(t) { $('lobbyStatus').textContent = t; }
 export function setLobbyError(t) { $('lobbyError').textContent = t; }
 export function setStartEnabled(on) { $('bstart').disabled = !on; }
+// Online: show whether this player is ready (the button toggles).
+export function setReadyButton(on) { const b = $('bready'); b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Ready ✓' : 'Ready'; }
 
 export function initLobby() {
   $('bstart').addEventListener('click', () => { if (cur && cur.onStart) cur.onStart(lobbyValues()); });
+  $('bready').addEventListener('click', () => { if (cur && cur.onReady) cur.onReady(); });
   const back = () => { if (cur && cur.onBack) cur.onBack(); };
   $('blobbyBack').addEventListener('click', back);
   onBack('lobby', back);

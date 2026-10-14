@@ -68,6 +68,7 @@ export function initInput(app, ui) {
     const S = app.S;
     if (ui.isRebinding()) { e.preventDefault(); if (!e.repeat) ui.finishRebind(e.code); return; }
     if (settings.fullscreenKey && e.code === settings.fullscreenKey) { if (!e.repeat) toggleFullscreen(); e.preventDefault(); return; }
+    if (e.code === 'Escape' && lostRecently()) return; // this Esc just released the mouse; nothing else to do
     if (menuKey(e)) return; // arrows, Esc (back) and typing in menus
     if (ui.settingsOpen()) return;
     const playing = !S.mode.demo && !app.paused;
