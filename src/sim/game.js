@@ -21,6 +21,7 @@ export function createGame(seed) {
     mode: {demo: true, vsCPU: false, diff: 'normal', target: 5},
     phase: 'countdown', // countdown → fight → ko → (next round) … → over
     timer: 0,           // ticks spent in the current phase (countdown / ko)
+    round: 0,           // counts rounds since the game was created (online play uses it to stay in step)
     scores: [0, 0], koWho: null, clashCD: 0, hitstop: 0, demoRounds: 0,
     F: [null, null], inp: [mkInput(), mkInput()], AI: [mkAI(), mkAI()],
   };
@@ -35,10 +36,10 @@ export const snapshot = S => structuredClone(S);
 export const isAI = (S, p) => S.mode.demo || (p === 1 && S.mode.vsCPU);
 
 // Start the menu exhibition bout, or a real match.
-// opts: {demo, vsCPU, diff, target, seed, map}
+// opts: {demo, vsCPU, online, diff, target, seed, map}
 export function newMatch(S, opts) {
   S.rng = opts.seed | 0; S.map = opts.map || DEFAULT_MAP;
-  S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, diff: opts.diff || 'normal', target: opts.target || 5};
+  S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, online: !!opts.online, diff: opts.diff || 'normal', target: opts.target || 5};
   S.scores = [0, 0]; S.demoRounds = 0;
   if (S.mode.demo) { S.AI[0].diff = S.AI[1].diff = 'normal'; }
   else S.AI[1].diff = S.mode.diff;
@@ -52,14 +53,21 @@ function startRound(S) {
   for (const f of S.F) finishPose(f);
   for (const i of S.inp) { for (const k in i.buf) i.buf[k] = 0; }
   for (const a of S.AI) { a.t = rand(S, .2, .5); a.move = 0; a.holdUp = 0; a.targetAng = .2; }
-  S.phase = 'countdown'; S.timer = 0; S.koWho = null; S.hitstop = 0;
+  S.phase = 'countdown'; S.timer = 0; S.koWho = null; S.hitstop = 0; S.round++;
   emit('roundStart');
 }
 
+// The lamp and callout events are tagged 'ko' so online play can hold them back
+// until both players' real inputs confirm the touch (see src/net/online.js).
 function roundOver(S, k1, k2) {
   S.phase = 'ko'; S.timer = 0; S.koWho = k1 && k2 ? 'double' : (k1 ? 0 : 1);
-  if (S.koWho === 'double') { emit('lamp', {p: 0, on: true}); emit('lamp', {p: 1, on: true}); emit('callout', {text: 'COUP DOUBLE', color: 'ink', dur: 1.6}); }
-  else { emit('lamp', {p: S.koWho, on: true}); emit('callout', {text: 'TOUCHÉ', color: S.koWho ? 'green' : 'red', dur: 1.6}); }
+  for (const e of koAnnouncements(S)) emit(e.type, {...e, ko: true});
+}
+
+// What to show when a round ends: scoring lamp(s) and the big callout.
+export function koAnnouncements(S) {
+  if (S.koWho === 'double') return [{type: 'lamp', p: 0, on: true}, {type: 'lamp', p: 1, on: true}, {type: 'callout', text: 'COUP DOUBLE', color: 'ink', dur: 1.6}];
+  return [{type: 'lamp', p: S.koWho, on: true}, {type: 'callout', text: 'TOUCHÉ', color: S.koWho ? 'green' : 'red', dur: 1.6}];
 }
 
 function endRound(S) {
@@ -74,12 +82,14 @@ function endRound(S) {
 // Copy a human's command for this tick into their input record.
 // cmd = {held: {left,right,up,down,raise,lower}, presses: ['attack', ...], aim: {x,y} | null}
 // aim is the mouse crosshair's offset from the shoulder. It is rounded to whole
-// pixels here, so every machine sees exactly the same value.
+// pixels here, so every machine sees exactly the same value ("|| 0" turns minus
+// zero into plain zero; see codec.js).
 function applyCommand(i, cmd) {
   if (!cmd) return;
   for (const k in cmd.held) i[k] = cmd.held[k];
   for (const a of cmd.presses) i.buf[a] = PRESS_BUFFER;
-  i.aim = cmd.aim ? {x: Math.round(clamp(cmd.aim.x, -AIM_REACH, AIM_REACH)), y: Math.round(clamp(cmd.aim.y, -AIM_REACH, AIM_REACH))} : null;
+  const q = v => Math.round(clamp(v, -AIM_REACH, AIM_REACH)) || 0;
+  i.aim = cmd.aim ? {x: q(cmd.aim.x), y: q(cmd.aim.y)} : null;
 }
 
 // Countdown calls and the pause after a touch.
