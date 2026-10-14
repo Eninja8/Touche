@@ -31,6 +31,7 @@
         <div class="btns">
           <button class="btn" id="b2p" type="button">Duel a friend</button>
           <button class="btn ghost" id="bcpu" type="button">Duel the CPU</button>
+          <button class="btn ghost" id="bonline" type="button">Play online</button>
           <button class="btn ghost" id="bset1" type="button">Settings</button>
           <button class="btn ghost fsbtn" data-fs type="button">Fullscreen</button>
         </div>
@@ -43,6 +44,43 @@
         <p class="touch-note">Touché needs a keyboard and mouse. Open this page on a computer to play.</p>
       </div>
     </div>
+    <div class="overlay" id="lobby" hidden>
+      <div class="panel">
+        <p class="big sm">Online duel</p>
+        <div class="panel-part" id="lobbyChoose">
+          <div class="btns">
+            <button class="btn" id="bhost" type="button">Host a match</button>
+            <button class="btn ghost" id="bjoinOpen" type="button">Join a match</button>
+          </div>
+          <p class="hint">Hosting gives you a short code to send to a friend. Your friend picks Join and types it in.</p>
+        </div>
+        <div class="panel-part" id="lobbyHost" hidden>
+          <p class="tag">Send this code to your friend:</p>
+          <div class="code-row"><span class="room-code" id="roomCode">····</span><button class="btn small" id="bcopy" type="button">Copy</button></div>
+          <p class="hint" id="hostStatus">Getting a code…</p>
+        </div>
+        <div class="panel-part" id="lobbyJoin" hidden>
+          <label class="tag" for="joinCode">Type your friend's code:</label>
+          <div class="code-row"><input id="joinCode" class="code-input" maxlength="4" autocomplete="off" spellcheck="false" aria-label="Room code"><button class="btn" id="bjoin" type="button">Join</button></div>
+          <p class="hint" id="joinStatus"></p>
+        </div>
+        <div class="panel-part" id="lobbyReady" hidden>
+          <p class="tag" id="readyText">Connected!</p>
+          <div class="btns"><button class="btn" id="bfight" type="button">Fight!</button></div>
+          <p class="hint" id="readyHint">The match starts when you both press Fight.</p>
+        </div>
+        <p class="note" id="lobbyError" aria-live="polite"></p>
+        <div class="btns"><button class="btn ghost small" id="blobbyBack" type="button">Back</button></div>
+      </div>
+    </div>
+    <div class="overlay" id="netmsg" hidden>
+      <div class="panel">
+        <p class="big sm" id="netmsgTitle">Disconnected</p>
+        <p class="tag" id="netmsgText"></p>
+        <div class="btns"><button class="btn" id="bnetmsgOk" type="button">Back to menu</button></div>
+      </div>
+    </div>
+    <div class="banner" id="netBanner" hidden></div>
     <div class="overlay" id="pause" hidden>
       <div class="panel">
         <p class="big">Halte</p>
@@ -64,7 +102,7 @@
           <button class="btn" id="brematch" type="button">Rematch</button>
           <button class="btn ghost" id="bmenu" type="button">Menu</button>
         </div>
-        <p class="hint">Enter for rematch · Esc for menu</p>
+        <p class="hint" id="overHint">Enter for rematch · Esc for menu</p>
       </div>
     </div>
     <div class="overlay" id="settings" hidden>

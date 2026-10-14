@@ -81,4 +81,12 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-acti
 .panel .touch-note{margin-top:4px}
 .fsbtn{white-space:nowrap}
 .set-head .btns{flex-wrap:nowrap}
+/* online lobby */
+.panel-part{display:flex;flex-direction:column;align-items:center;gap:12px}
+.code-row{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.room-code{font:900 64px/1 var(--display);letter-spacing:.14em;color:var(--ink)}
+.code-input{font:500 32px/1 var(--mono);width:6ch;padding:8px 10px;text-align:center;text-transform:uppercase;letter-spacing:.12em;border:2px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+.code-input:focus-visible{outline:3px solid var(--spark);outline-offset:2px}
+.banner{position:absolute;left:50%;top:104px;transform:translateX(-50%);padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--card) 88%,transparent);font:500 12px var(--mono);letter-spacing:.06em;color:var(--ink);pointer-events:none;text-align:center;max-width:calc(100% - 32px)}
+.banner.bad{color:var(--red);border-color:var(--red)}
 @media (prefers-reduced-motion:reduce){.lamp{transition:none}}

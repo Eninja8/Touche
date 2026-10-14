@@ -6,6 +6,7 @@
 //
 // The simulation always advances in fixed 1/120 s ticks, no matter the screen's
 // frame rate. Slow motion after a touch only changes how fast ticks are fed in.
+// Online matches are driven by src/net/online.js instead of the local loop below.
 
 import {DT} from './sim/constants.js';
 import {getMap} from './sim/maps.js';
@@ -19,6 +20,7 @@ import {unlockAudio, sfx} from './view/audio.js';
 import {C} from './view/theme.js';
 import {fx, view, puff, sparks, callout, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
 import {render} from './view/render.js';
+import * as online from './net/online.js';
 
 // A fresh random seed for each match. (Choosing the seed is the only place
 // Math.random touches the simulation; online, the host will pick and share it.)
@@ -28,11 +30,16 @@ let slow = 0; // seconds of KO slow motion left (real time)
 let resumeWanted = false; // waiting for the mouse lock before un-pausing
 
 // Does the match need the mouse locked right now?
-const wantsLock = () => mousePlayer(app.S) >= 0 && !app.paused && app.S.phase !== 'over';
+const wantsLock = () => mousePlayer(app.S) >= 0 && !app.paused && !app.menuOpen && app.S.phase !== 'over' && (!app.S.mode.online || online.inMatch());
+
+// Which player this computer's mouse and keys control (Red locally).
+const localIndex = S => S.mode.online ? online.localPlayer() : 0;
+const refreshHud = () => hud(app.S, app.S.mode.online ? {me: online.localPlayer(), ping: online.ping()} : null);
 
 const app = {
   S: createGame(newSeed()),
-  paused: false,
+  paused: false,   // local match frozen
+  menuOpen: false, // online: pause menu showing (the match keeps running)
 
   startMatch(vsCPU) {
     unlockAudio();
@@ -43,15 +50,26 @@ const app = {
   },
 
   showMenu() {
-    releaseLock(); resumeWanted = false;
+    online.leave();
+    releaseLock(); resumeWanted = false; app.menuOpen = false;
+    for (const id of ['lobby', 'netmsg']) document.getElementById(id).hidden = true;
     app.paused = false; menuEl.hidden = false; pauseEl.hidden = true; overEl.hidden = true; setEl.hidden = true; ui.cancelRebind();
     newMatch(app.S, {demo: true, seed: newSeed()});
     dispatch(drain());
     document.getElementById('b2p').focus({preventScroll: true});
   },
 
+  rematch() { if (app.S.mode.online) online.requestRematch(); else app.startMatch(app.S.mode.vsCPU); },
+
   pause() {
-    if (app.paused || app.S.phase === 'over' || app.S.mode.demo) return;
+    if (app.paused || app.menuOpen || app.S.phase === 'over' || app.S.mode.demo) return;
+    if (app.S.mode.online) { // can't freeze an online match: just show the menu over it
+      if (!online.inMatch()) return;
+      app.menuOpen = true; resumeWanted = false; pauseEl.hidden = false; clearKeys(); releaseLock();
+      setPauseHint(settings.mouseAim, true);
+      document.getElementById('bresume').focus({preventScroll: true});
+      return;
+    }
     app.paused = true; resumeWanted = false; pauseEl.hidden = false; clearKeys(); releaseLock();
     setPauseHint(settings.mouseAim);
     document.getElementById('bresume').focus({preventScroll: true});
@@ -60,15 +78,15 @@ const app = {
   // With mouse aiming, resuming must re-grab the mouse first; the game
   // continues once the browser confirms the lock (see onLockChange below).
   resume() {
-    if (!app.paused) return;
-    if (mousePlayer(app.S) < 0) { app.paused = false; pauseEl.hidden = true; return; }
+    if (!app.paused && !app.menuOpen) return;
+    if (mousePlayer(app.S) < 0) { app.paused = app.menuOpen = false; pauseEl.hidden = true; return; }
     resumeWanted = true;
     requestLock().catch(() => { resumeWanted = false; setPauseNote('Click Resume to grab the mouse. (Right after Esc, the browser may need a second.)'); });
   },
 };
 
 onLockChange(locked => {
-  if (locked && resumeWanted) { resumeWanted = false; app.paused = false; pauseEl.hidden = true; }
+  if (locked && resumeWanted) { resumeWanted = false; app.paused = app.menuOpen = false; pauseEl.hidden = true; }
   else if (!locked && wantsLock()) app.pause(); // Esc, alt-tab, clicking away
 });
 
@@ -81,9 +99,13 @@ function checkLock(now) {
 }
 
 // React to what happened inside the simulation this tick.
-function dispatch(events) {
+// isOnline: events from an online tick that a rollback could still undo. The
+// KO announcements are skipped (online.js shows them once the touch is
+// confirmed) and the body is marked provisional, with no slow motion yet.
+function dispatch(events, isOnline) {
   const S = app.S;
   for (const e of events) {
+    if (isOnline && e.ko) continue;
     switch (e.type) {
       case 'sfx': sfx(e.name, S.mode.demo); break;
       case 'puff': puff(e.x, e.y, e.n); break;
@@ -92,10 +114,10 @@ function dispatch(events) {
       case 'text': fx.push({type: 'text', x: e.x, y: e.y, vx: 0, vy: -60, life: .8, max: .8, text: e.text, color: C[e.color]}); break;
       case 'callout': callout(e.text, C[e.color], e.dur); break;
       case 'lamp': setLamp(e.p, e.on); break;
-      case 'kill': onKill(e.victim, e.hit); slow = .8; sfx('kill', S.mode.demo); break;
-      case 'roundStart': resetRound(S); resetCross(S.F[0].face); slow = 0; setLamp(0, false); setLamp(1, false); hud(S); break;
-      case 'score': hud(S); break;
-      case 'matchOver': releaseLock(); showGameOver(S, e.winner); break;
+      case 'kill': onKill(e.victim, e.hit, isOnline); if (!isOnline) slow = .8; sfx('kill', S.mode.demo); break;
+      case 'roundStart': resetRound(S); resetCross(S.F[localIndex(S)].face); slow = 0; setLamp(0, false); setLamp(1, false); refreshHud(); break;
+      case 'score': refreshHud(); break;
+      case 'matchOver': releaseLock(); showGameOver(S, e.winner, S.mode.online ? online.localPlayer() : -1); break;
       case 'matchStart': case 'clearDecals': clearDecals(getMap(S)); break;
     }
   }
@@ -112,7 +134,8 @@ function tick() {
 let acc = 0, last = performance.now();
 function frame(now) {
   const rdt = Math.min(.05, (now - last) / 1000); last = now;
-  if (!app.paused) {
+  if (online.isActive()) { online.frame(rdt, now); updateRealtime(rdt); }
+  else if (!app.paused) {
     let ts = 1;
     if (slow > 0) { slow -= rdt; const k = Math.max(0, slow) / .8; ts = 1 - .8 * Math.pow(k, .6); }
     acc += rdt * ts;
@@ -127,6 +150,7 @@ function frame(now) {
 
 const ui = initMenus(app);
 initInput(app, ui);
+online.initOnline({app, dispatch, hud: refreshHud});
 dispatch(drain());
 app.showMenu();
 if (document.fonts && document.fonts.load) { document.fonts.load('900 92px "Big Shoulders Display"').catch(() => {}); }

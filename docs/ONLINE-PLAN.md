@@ -1,6 +1,6 @@
 # Plan: online 1v1 with room codes (Phase 2)
 
-Status: **proposal, waiting for the owner's OK.** Nothing here is built yet.
+Status: **built** (October 2026), with the owner's additions: the KO slow motion is played locally as a replay after the touch is confirmed, then both players meet with a ready handshake; nothing that a rollback could undo is announced. See DEVLOG.md for details.
 
 ## The big picture
 - **Connection:** peer-to-peer WebRTC through **PeerJS**. One player clicks *Host* and gets a short room code (like `KX7Q`); the friend types it in. PeerJS's free public server only introduces the two browsers; after that, game data goes directly between them.

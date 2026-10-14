@@ -25,8 +25,8 @@ const dctx = decals.getContext('2d');
 export function clearDecals(map) { decals.width = map.width * 2; decals.height = map.height * 2; }
 function splat(x, y, r) { dctx.fillStyle = C.blood; dctx.globalAlpha = .85; dctx.beginPath(); dctx.ellipse(x * 2, y * 2, r * 3.2, r * 1.1, 0, 0, Math.PI * 2); dctx.fill(); dctx.globalAlpha = 1; }
 
-export function sparks(x, y, n) { for (let k = 0; k < n; k++) { const a = rnd(0, Math.PI * 2), s = rnd(150, 620); fx.push({type: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: rnd(.15, .32), max: .32}); } }
-function blood(x, y, vx, vy, n) { const sp = Math.hypot(vx, vy) || 1; for (let k = 0; k < n; k++) { const s = rnd(.15, .65); fx.push({type: 'blood', x, y, vx: vx / sp * Math.min(sp, 900) * s + rnd(-160, 160), vy: vy / sp * Math.min(sp, 900) * s + rnd(-320, 60), life: 3, max: 3, size: rnd(1.6, 4)}); } }
+export function sparks(x, y, n, tag) { for (let k = 0; k < n; k++) { const a = rnd(0, Math.PI * 2), s = rnd(150, 620); fx.push({type: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: rnd(.15, .32), max: .32, tag}); } }
+function blood(x, y, vx, vy, n, tag) { const sp = Math.hypot(vx, vy) || 1; for (let k = 0; k < n; k++) { const s = rnd(.15, .65); fx.push({type: 'blood', x, y, vx: vx / sp * Math.min(sp, 900) * s + rnd(-160, 160), vy: vy / sp * Math.min(sp, 900) * s + rnd(-320, 60), life: 3, max: 3, size: rnd(1.6, 4), tag}); } }
 export function puff(x, y, n) { for (let k = 0; k < n; k++) fx.push({type: 'puff', x: x + rnd(-8, 8), y, vx: rnd(-90, 90), vy: rnd(-50, -10), life: rnd(.25, .4), max: .4, size: rnd(3, 6)}); }
 export function callout(text, color, dur) { view.callout = {text, color, t: 0, dur}; }
 
@@ -41,7 +41,10 @@ export function resetRound(S) {
 const RAG_LINKS = [['head', 'neck'], ['neck', 'hip'], ['hip', 'kF'], ['kF', 'fF'], ['hip', 'kB'], ['kB', 'fB'], ['neck', 'elbow'], ['elbow', 'hand'], ['neck', 'bElbow'], ['bElbow', 'bHand']];
 
 // Turn a killed fighter into a floppy body plus a loose sword, then add blood.
-export function onKill(f, hit) {
+// provisional (online only): the touch might still be undone by a rollback, so
+// its blood can't stain the floor yet; see confirmKills() and undoKill().
+export function onKill(f, hit, provisional) {
+  const tag = provisional ? {victim: f.id} : undefined;
   const P = f.P, pts = {}, n = Math.hypot(hit.vx, hit.vy) || 1, mag = Math.min(hit.sp, 1100) * .55, ix = hit.vx / n * mag, iy = hit.vy / n * mag - 140;
   for (const k of ['head', 'neck', 'hip', 'kF', 'fF', 'kB', 'fB', 'elbow', 'hand', 'bElbow', 'bHand']) {
     const d = Math.hypot(P[k].x - hit.p.x, P[k].y - hit.p.y), w = Math.max(.25, 1 - d / 90);
@@ -49,12 +52,24 @@ export function onKill(f, hit) {
   }
   const decap = hit.part === 'head' && hit.sp > 820 && Math.random() < .6;
   const cons = RAG_LINKS.filter((l, j) => !(decap && j === 0)).map(([a, b]) => ({a, b, len: Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y)}));
-  ragdolls.push({pts, cons, id: f.id, face: f.face});
+  ragdolls.push({pts, cons, id: f.id, face: f.face, tag});
   const hv = {x: (P.hand.x - f.prevHand.x) / DT, y: (P.hand.y - f.prevHand.y) / DT};
-  swords.push({a: {x: P.hand.x, y: P.hand.y, px: P.hand.x - (hv.x + rnd(-150, 150)) * DT, py: P.hand.y - (hv.y - 200) * DT}, b: {x: P.tip.x, y: P.tip.y, px: P.tip.x - (hv.x + rnd(-400, 400)) * DT, py: P.tip.y - (hv.y - rnd(100, 400)) * DT}, id: f.id});
-  if (settings.blood) blood(hit.p.x, hit.p.y, hit.vx, hit.vy, 28); else sparks(hit.p.x, hit.p.y, 30);
+  swords.push({a: {x: P.hand.x, y: P.hand.y, px: P.hand.x - (hv.x + rnd(-150, 150)) * DT, py: P.hand.y - (hv.y - 200) * DT}, b: {x: P.tip.x, y: P.tip.y, px: P.tip.x - (hv.x + rnd(-400, 400)) * DT, py: P.tip.y - (hv.y - rnd(100, 400)) * DT}, id: f.id, tag});
+  if (settings.blood) blood(hit.p.x, hit.p.y, hit.vx, hit.vy, 28, tag); else sparks(hit.p.x, hit.p.y, 30, tag);
   view.shake = Math.max(view.shake, 13);
 }
+
+// Online: is there a body on the floor for fighter p?
+export const hasRagdoll = p => ragdolls.some(r => r.id === p);
+
+// Online: a rollback undid fighter p's death. Remove its body, sword and blood.
+export function undoKill(p) {
+  const mine = o => o.id === p || (o.tag && o.tag.victim === p);
+  for (const list of [ragdolls, swords, fx]) for (let j = list.length - 1; j >= 0; j--) if (mine(list[j]) && (list !== fx || list[j].tag)) list.splice(j, 1);
+}
+
+// Online: the touch is confirmed, so its blood may now stain the floor.
+export function confirmKills() { for (const list of [ragdolls, swords, fx]) for (const o of list) o.tag = undefined; }
 
 function verletPoint(p, dt) { const vx = (p.x - p.px) * .995, vy = (p.y - p.py) * .995; p.px = p.x; p.py = p.y; p.x += vx; p.y += vy + GRAV * .8 * dt * dt; }
 function collidePoint(p, r, map) {
@@ -106,7 +121,9 @@ export function updateFx(S, dt) {
       for (const pl of platforms) if (!hit && p.vy > 0 && p.y >= pl.y && p.y < pl.y + 10 && p.x > pl.x && p.x < pl.x + pl.w) { hit = true; p.y = pl.y + 1; }
       // side walls are invisible: drops bounce off them and fall to the floor instead of sticking in mid-air
       if (p.x < LEFT || p.x > RIGHT) { p.x = clamp(p.x, LEFT, RIGHT); p.vx *= -.15; }
-      if (hit) { splat(p.x, p.y, p.size); p.life = 0; }
+      // provisional blood waits on the floor (not painted) until the touch is confirmed
+      if (hit && p.tag) { p.vx = p.vy = 0; p.life = Math.max(p.life, .5); }
+      else if (hit) { splat(p.x, p.y, p.size); p.life = 0; }
     }
     else if (p.type === 'puff') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .92; p.vy *= .92; }
     else if (p.type === 'text') { p.y += p.vy * dt; }

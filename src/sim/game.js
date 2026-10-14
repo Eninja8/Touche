@@ -15,16 +15,21 @@ import {rand} from './rng.js';
 import {getMap, DEFAULT_MAP} from './maps.js';
 import {emit} from './events.js';
 
-export function createGame(seed) {
-  const S = {
+// A brand-new game state with nothing carried over.
+function freshState(seed) {
+  return {
     tick: 0, rng: seed | 0, map: DEFAULT_MAP,
-    mode: {demo: true, vsCPU: false, diff: 'normal', target: 5},
+    mode: {demo: true, vsCPU: false, online: false, diff: 'normal', target: 5},
     phase: 'countdown', // countdown → fight → ko → (next round) … → over
     timer: 0,           // ticks spent in the current phase (countdown / ko)
-    round: 0,           // counts rounds since the game was created (online play uses it to stay in step)
+    round: 0,           // round number within the current match (online play uses it to stay in step)
     scores: [0, 0], koWho: null, clashCD: 0, hitstop: 0, demoRounds: 0,
     F: [null, null], inp: [mkInput(), mkInput()], AI: [mkAI(), mkAI()],
   };
+}
+
+export function createGame(seed) {
+  const S = freshState(seed);
   startRound(S);
   return S;
 }
@@ -38,9 +43,12 @@ export const isAI = (S, p) => S.mode.demo || (p === 1 && S.mode.vsCPU);
 // Start the menu exhibition bout, or a real match.
 // opts: {demo, vsCPU, online, diff, target, seed, map}
 export function newMatch(S, opts) {
-  S.rng = opts.seed | 0; S.map = opts.map || DEFAULT_MAP;
+  // Wipe everything from before (such as the menu's demo bout) so that two
+  // computers starting the same online match start from identical states.
+  for (const k of Object.keys(S)) delete S[k];
+  Object.assign(S, freshState(opts.seed));
+  S.map = opts.map || DEFAULT_MAP;
   S.mode = {demo: !!opts.demo, vsCPU: !!opts.vsCPU, online: !!opts.online, diff: opts.diff || 'normal', target: opts.target || 5};
-  S.scores = [0, 0]; S.demoRounds = 0;
   if (S.mode.demo) { S.AI[0].diff = S.AI[1].diff = 'normal'; }
   else S.AI[1].diff = S.mode.diff;
   emit('matchStart');

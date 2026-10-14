@@ -1,14 +1,14 @@
 # Touché dev log
 
 ## Current state
-- **Playable:** local 2-player (one keyboard), vs CPU (easy/normal/hard), menu demo bout, settings with key rebinding, sound, ragdoll deaths. Fixed 120 Hz simulation.
+- **Playable:** online 1v1 with room codes (rollback netcode over PeerJS), local 2-player (Red on mouse + keyboard, Green on keyboard), vs CPU (easy/normal/hard), menu demo bout, settings with key rebinding, sound, ragdoll deaths. Fixed 120 Hz simulation.
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
-- **Next:** Part 3, online 1v1 with room codes (PeerJS + rollback). Plan: `docs/ONLINE-PLAN.md`.
+- **Next:** owner playtests online (two windows side by side, then with a friend). Then more maps.
 
 ## Roadmap
-1. Online 1v1 with room codes (in progress).
+1. Online 1v1 with room codes (built; being playtested).
 2. More maps (the arena is already map data in `src/sim/maps.js`).
 3. Controller support (Gamepad API).
 4. Windows EXE on Steam with Steam lobbies and friend invites.
@@ -52,3 +52,20 @@ Owner approved the online plan and PeerJS with its free public server.
 - Replaced the crosshair and reach circle with a faint, wide chevron just past blade reach, pointing where the mouse aims. Same aiming system and controls. New setting "Aim indicator: Arrow / Off".
 - Removed the floor text and tick marks.
 - The arena is now map data (`src/sim/maps.js`): size, floor, walls, platforms, spawn points, light/dark colours. The match stores the map name in `S.map`; sim, effects and renderer all read the map. Only the current map ("Fencing hall") exists. Gameplay unchanged: the long determinism test gives exactly the same score as before the change.
+
+**Part 3, online 1v1** (built in the planned steps; stopped after the two-window test as asked):
+- *PeerJS 1.5.5* vendored as `src/vendor/peerjs-1.5.5.min.js` (MIT licence included; checksum matches npm). Loaded only when "Play online" is used. It includes Google STUN and PeerJS's free TURN relays.
+- *Rollback core* (`src/net/rollback.js`, `codec.js`): inputs packed as `[bits]` or `[bits, ax, ay]`; 2-tick input delay; up to 12 ticks of prediction (guess = same held keys and aim, no presses); rewind-and-replay on a wrong guess; confirmed-frame tracking; a state fingerprint is compared with the opponent every 60 ticks.
+- *No-network test* (`tools/netcode-test.mjs`, part of `npm test`): two simulated players over a fake network (30 ms; 100 ms + jitter + 10% loss + slow frames; 200 ms) must end identical to each other and to a straight run. It found two real bugs:
+  1. **Minus zero:** rounding a small negative mouse offset gives −0, which stayed −0 locally but became 0 over the network. `Math.atan2` treats them differently (aiming flat backward came out as fully up vs fully down). Fixed by turning −0 into 0 in `codec.encode` and in the sim.
+  2. **Leftover state:** the menu's demo bout ran a different length on each computer, and `newMatch` only reset some fields (the tick counter and clash cooldown carried over). `newMatch` now wipes the whole state, and the test now starts each player from a different history.
+- *Online flow* (`src/net/online.js`, `transport.js`):
+  - Lobby: Play online → Host (4-letter code with a Copy button) or Join (type the code). The host is Red and the joiner Green; the host picks the seed, match length and map.
+  - Both press Fight → ready handshake → the round runs with rollback.
+  - A touch is announced (TOUCHÉ callout, lamp, point) only when confirmed by both players' real inputs. The ragdoll shows immediately but is provisional: it's removed if a rollback undoes it, and its blood can't stain the floor until confirmed.
+  - After confirmation, each computer rewinds to the confirmed KO tick and plays the KO in slow motion locally with no inputs (identical on both), then both meet with a ready handshake for the next round. A rematch needs both players to agree.
+  - Ping shows in the scoreboard; "Waiting for your friend…" appears if the game has to stall. Leaving or closing the page sends a goodbye, otherwise a 5 s timeout ends the match. A version check refuses mismatched builds.
+  - Online, Esc shows the menu but the match keeps running. Online players use the Red key layout (plus arrows/Space/Shift) and their own mouse.
+- *Fake bad internet:* add `?lag=ms&jitter=ms&loss=percent` to the address.
+- *Verified* with two real browser windows through the real PeerJS server: full matches to game over plus a rematch at about 1 ms, 143 ms and 240 ms ping (with 3–5% loss). Scores identical on both sides, zero desyncs, no errors. Closing one window shows "Your friend left the match" on the other within 25 ms. Local CPU and 2-player modes still work.
+- *Known limits:* a game in a background tab pauses (browsers stop drawing hidden tabs), so the friend sees "Waiting for your friend…". Test alone with two windows, not two tabs. Keyboard and mouse only reach the focused window.

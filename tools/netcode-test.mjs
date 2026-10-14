@@ -38,7 +38,10 @@ const MATCH = {demo: false, vsCPU: false, online: true, target: 99, seed: 4242};
 function runNetwork({ticks, delay, jitter, loss, hiccup, seed}) {
   const rand = rng(seed);
   const peers = [0, 1].map(me => {
-    const S = createGame(1); newMatch(S, MATCH); drain();
+    // Each player's game has a different history before the match (like the menu's demo bout
+    // running for different lengths on each computer). newMatch must wipe all of it.
+    const S = createGame(me + 7); newMatch(S, {demo: true, seed: me + 3}); for (let k = 0; k < 500 + 700 * me; k++) step(S, [null, null]);
+    newMatch(S, MATCH); drain();
     return {me, S, session: new RollbackSession(S, me, S.round), inbox: []};
   });
   const final = ticks;

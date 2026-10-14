@@ -78,20 +78,33 @@ function closeSettings() { rebinding = null; setEl.hidden = true; if (setReturn 
 
 // ---------- HUD ----------
 export function setLamp(i, on) { $('lamp' + (i + 1)).classList.toggle('lit', on); }
-export function hud(S) {
+// net: online info {me, ping} or null
+export function hud(S, net) {
   const m = S.mode;
+  if (net) {
+    $('s1').textContent = S.scores[0]; $('s2').textContent = S.scores[1];
+    $('n1').textContent = net.me === 0 ? 'Red · You' : 'Red · Friend'; $('n2').textContent = net.me === 1 ? 'Green · You' : 'Green · Friend';
+    $('status').textContent = `Online · first to ${m.target}` + (net.ping ? ` · ${net.ping} ms` : '');
+    return;
+  }
   $('s1').textContent = m.demo ? '–' : S.scores[0]; $('s2').textContent = m.demo ? '–' : S.scores[1];
   $('n1').textContent = m.vsCPU && !m.demo ? 'Red · You' : 'Red'; $('n2').textContent = m.vsCPU && !m.demo ? 'Green · CPU ' + m.diff : 'Green';
   $('status').textContent = m.demo ? 'Exhibition bout' : `First to ${m.target} · one touch kills`;
 }
-export function showGameOver(S, w) {
-  const names = S.mode.vsCPU ? ['You win', 'The CPU wins'] : ['Red wins', 'Green wins'];
+// me: this computer's player when online, else -1
+export function showGameOver(S, w, me) {
+  const names = me >= 0 ? (me === 0 ? ['You win', 'Your friend wins'] : ['Your friend wins', 'You win']) : S.mode.vsCPU ? ['You win', 'The CPU wins'] : ['Red wins', 'Green wins'];
+  $('overHint').textContent = me >= 0 ? 'A rematch starts when you both pick Rematch.' : 'Enter for rematch · Esc for menu';
   $('winText').textContent = names[w]; $('winText').style.color = w ? 'var(--green)' : 'var(--red)';
   $('winScore').textContent = `${S.scores[0]} – ${S.scores[1]}`;
   overEl.hidden = false; $('brematch').focus({preventScroll: true});
 }
 // Pause screen text depends on whether resuming needs a click to grab the mouse again.
-export function setPauseHint(needsClick) { $('pauseHint').textContent = needsClick ? 'Click Resume to grab the mouse again' : 'Esc to resume'; $('pauseNote').textContent = ''; }
+// online: the match keeps running behind the menu
+export function setPauseHint(needsClick, online) {
+  $('pauseHint').textContent = (online ? 'The match keeps running! ' : '') + (needsClick ? 'Click Resume to grab the mouse again' : 'Esc to resume');
+  $('pauseNote').textContent = '';
+}
 export function setPauseNote(t) { $('pauseNote').textContent = t; }
 export const selectedDifficulty = () => { const sel = document.querySelector('input[name="diff"]:checked'); return sel ? sel.value : 'normal'; };
 
@@ -119,7 +132,7 @@ export function initMenus(app) {
   $('bcpu').addEventListener('click', () => app.startMatch(true));
   $('bresume').addEventListener('click', () => app.resume());
   $('bquit').addEventListener('click', () => app.showMenu());
-  $('brematch').addEventListener('click', () => app.startMatch(app.S.mode.vsCPU));
+  $('brematch').addEventListener('click', () => app.rematch());
   $('bmenu').addEventListener('click', () => app.showMenu());
   return {
     isRebinding: () => !!rebinding, finishRebind, syncSettingsUI,
