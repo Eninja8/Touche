@@ -1,26 +1,73 @@
 // Blade-on-body hits, blade-on-blade clashes, parries and kills.
 
-import {DT, LETHAL, HITSTOP_TICKS} from './constants.js';
-import {lerp, distPtSeg} from './util.js';
+import {DT, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS} from './constants.js';
+import {clamp, lerp, distPtSeg, distPtSegX} from './util.js';
 import {bodyParts, lungeActive} from './fighter.js';
 import {emit} from './events.js';
 
+// The blade is checked at SAMPLES+1 points, from 30% of the way along it (near the
+// guard) out to the point. 12 gaps keep them closer together than a limb is thick.
+const SAMPLES = 12, REACH = 1.5;
+const bladePt = (hand, tip, k) => { const t = .3 + .7 * k / SAMPLES; return {x: lerp(hand.x, tip.x, t), y: lerp(hand.y, tip.y, t)}; };
+
 // Does A's blade touch B's body this tick? Returns hit info (and whether it kills) or null.
+// A contact kills if: A is thrusting; or that part of the blade moves at LETHAL speed
+// relative to B (a swing); or it is the point and it's driven into B at TIP_LETHAL along
+// the blade (running onto the point). A lethal contact wins over a harmless one.
 export function bladeContact(A, B) {
   const PA = A.P, ps = bodyParts(B.P);
-  for (let k = 0; k <= 8; k++) {
-    const t = .3 + .7 * k / 8;
-    const p = {x: lerp(PA.hand.x, PA.tip.x, t), y: lerp(PA.hand.y, PA.tip.y, t)};
-    const pp = {x: lerp(A.prevHand.x, A.prevTip.x, t), y: lerp(A.prevHand.y, A.prevTip.y, t)};
+  let harmless = null;
+  for (let k = 0; k <= SAMPLES; k++) {
+    const p = bladePt(PA.hand, PA.tip, k), pp = bladePt(A.prevHand, A.prevTip, k);
     const mid = {x: (p.x + pp.x) / 2, y: (p.y + pp.y) / 2};
     for (const q of ps) {
-      if (distPtSeg(p, q.a, q.b) < q.r + 1.5 || distPtSeg(mid, q.a, q.b) < q.r + 1.5) {
+      if (distPtSeg(p, q.a, q.b) < q.r + REACH || distPtSeg(mid, q.a, q.b) < q.r + REACH) {
         const vx = (p.x - pp.x) / DT - B.vx, vy = (p.y - pp.y) / DT - B.vy, sp = Math.hypot(vx, vy);
-        return {p, vx, vy, sp, part: q.n, lethal: lungeActive(A) || (sp >= LETHAL && A.noLethal <= 0)};
+        const tip = .3 + .7 * k / SAMPLES >= 1 - TIP_ZONE, closing = vx * PA.dx + vy * PA.dy;
+        const lethal = !!lungeActive(A) || (A.noLethal <= 0 && (sp >= LETHAL || (tip && closing >= TIP_LETHAL)));
+        const hit = {p, vx, vy, sp, part: q.n, tip, lethal};
+        if (lethal) return hit;
+        harmless = harmless || hit;
+        break;
       }
     }
   }
-  return null;
+  return harmless;
+}
+
+// How much does A's blade still overlap B's body if B slides sideways by ox pixels?
+function overlap(A, B, ox) {
+  const ps = bodyParts(B.P); let worst = 0;
+  for (let k = 0; k <= SAMPLES; k++) {
+    const p = bladePt(A.P.hand, A.P.tip, k);
+    for (const q of ps) worst = Math.max(worst, q.r + REACH - distPtSegX(p, q.a, q.b, ox));
+  }
+  return worst;
+}
+
+// Slide fighter f sideways by dx (stopping at the walls), pose included. Returns how far it moved.
+function slide(f, dx, map) {
+  const nx = clamp(f.x + dx, map.walls.left, map.walls.right), moved = nx - f.x;
+  f.x = nx;
+  for (const k in f.P) if (f.P[k] && f.P[k].x !== undefined) f.P[k].x += moved;
+  return moved;
+}
+
+// A's blade touched B harmlessly: blades are solid, so shove B out of it (away from A,
+// unless only the other way clears it) and push A back a little. Either side
+// moving into the blade loses that speed, as if they had hit something solid.
+export function bladePush(A, B, map) {
+  const away = Math.sign(B.x - A.x) || A.face;
+  // smallest sideways shift (in 1 px steps, up to PUSH_MAX) that clears the blade
+  const clearAt = dir => { for (let s = 0; s <= PUSH_MAX; s++) if (overlap(A, B, dir * s) <= 0) return s; return Infinity; };
+  const sAway = clearAt(away), sBack = clearAt(-away);
+  const dir = sAway === Infinity && sBack < Infinity ? -away : away, need = Math.min(dir === away ? sAway : sBack, PUSH_MAX);
+  if (need > 0) {
+    const movedB = Math.abs(slide(B, dir * need * (1 - PUSH_HOLDER), map));
+    slide(A, -dir * (need - movedB), map); // A takes its share, plus whatever the wall stopped B from taking
+  }
+  if (B.vx * dir < 0) B.vx = 0;
+  if (A.vx * dir > 0) A.vx *= .5;
 }
 
 // Blades met. If only one fencer was thrusting, the other parries.

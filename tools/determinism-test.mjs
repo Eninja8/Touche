@@ -11,6 +11,9 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createGame, newMatch, step, snapshot} from '../src/sim/game.js';
 import {drain} from '../src/sim/events.js';
+import {bodyParts} from '../src/sim/fighter.js';
+import {distPtSeg} from '../src/sim/util.js';
+import {TIP_LETHAL} from '../src/sim/constants.js';
 
 const simDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/sim');
 let failed = false;
@@ -75,6 +78,37 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
   for (let k = 0; k < 60; k++) { run({x: -100 * face0, y: 0}, 1); maxSpeed = Math.max(maxSpeed, f.tipSpeed); maxTipY = Math.min(maxTipY, f.P.tip.y); }
   check(maxTipY < startY - 60, 'the blade swings over the top to the new side');
   check(maxSpeed >= 600, `that swing is fast enough to be lethal (${Math.round(maxSpeed)} px/s)`);
+}
+
+// 5. the point and solid blades. Red stands still, blade level; Green keeps its blade pointed
+// at the floor so only Red's blade can touch. "Inside" = Red's blade sits in Green's body.
+{
+  const G = createGame(1); newMatch(G, {demo: false, vsCPU: false, seed: 9});
+  const keys = (o = {}) => ({held: {left: false, right: false, up: false, down: false, raise: false, lower: false, ...o}, presses: [], aim: null});
+  const low = (o = {}) => keys({lower: true, ...o}); // Green's commands: blade held down
+  let killed = null, inside = 0;
+  const inBody = () => { const A = G.F[0], B = G.F[1]; for (let k = 0; k <= 20; k++) { const t = .3 + .7 * k / 20, p = {x: A.P.hand.x + (A.P.tip.x - A.P.hand.x) * t, y: A.P.hand.y + (A.P.tip.y - A.P.hand.y) * t}; for (const q of bodyParts(B.P)) if (distPtSeg(p, q.a, q.b) < q.r - .5) return true; } return false; };
+  const run = (red, green, n) => { for (let k = 0; k < n; k++) { step(G, [red, green]); for (const e of drain()) if (e.type === 'kill') killed = killed || e; if (G.phase === 'fight' && G.F[1].alive && inBody()) inside++; } };
+  run(keys(), low(), 160); // countdown, then Green's blade goes down
+  const reachX = () => G.F[0].P.tip.x;
+  // Green walks up and stops a few pixels short of the point, then inches in with short taps
+  while (G.F[1].x - reachX() > 30) run(keys(), low({left: true}), 1);
+  run(keys(), low(), 40);
+  check(!killed, 'standing still near the point is safe');
+  for (let tap = 0; tap < 20; tap++) { run(keys(), low({left: true}), 3); run(keys(), low(), 12); }
+  check(!killed, 'inching onto the point does not kill');
+  check(inside === 0, `the point never goes inside the body; it pushes Green back (Green ${Math.round(G.F[1].x - reachX())} px from the point)`);
+  // a slow keyboard swing down through Green's body: harmless, and solid
+  run(keys({raise: true}), low(), 60); // Red's blade up
+  while (G.F[1].x - G.F[0].x > 60) run(keys(), low({left: true}), 1); // Green steps in under it
+  run(keys(), low(), 20);
+  const x0 = G.F[1].x;
+  run(keys({lower: true}), low(), 25); // down to level, through Green
+  check(!killed && inside === 0, `a slow swing (${Math.round(G.F[0].angSpd * 100)} px/s at the point) neither kills nor passes through (Green shoved ${Math.round(Math.abs(G.F[1].x - x0))} px)`);
+  // Green backs off, then runs onto the point
+  run(keys(), low({right: true}), 30); run(keys(), low(), 30);
+  for (let k = 0; k < 120 && !killed; k++) run(keys(), low({left: true}), 1);
+  check(killed && killed.victim.id === 1 && killed.hit.tip, `running onto the point kills (closing at ${killed ? Math.round(killed.hit.vx * G.F[0].P.dx + killed.hit.vy * G.F[0].P.dy) : 0} px/s, ${TIP_LETHAL} needed)`);
 }
 
 console.log(failed ? '\nSome checks FAILED.' : '\nAll checks passed.');

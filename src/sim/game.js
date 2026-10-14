@@ -9,7 +9,7 @@
 import {DT, PRESS_BUFFER, AIM_REACH, COUNTDOWN_READY, COUNTDOWN_GO, KO_TICKS} from './constants.js';
 import {clamp, segSeg} from './util.js';
 import {mkFighter, mkInput, finishPose, updateFighter} from './fighter.js';
-import {bladeContact, clash, kill} from './combat.js';
+import {bladeContact, bladePush, clash, kill} from './combat.js';
 import {mkAI, aiStep} from './ai.js';
 import {rand} from './rng.js';
 import {getMap, DEFAULT_MAP} from './maps.js';
@@ -136,12 +136,13 @@ export function step(S, cmds) {
   let clashed = false;
   if (live && a.alive && b.alive && S.clashCD <= 0) { const r = segSeg(a.P.hand, a.P.tip, b.P.hand, b.P.tip); if (r.d < 5) { clash(S, a, b, r.p); clashed = true; } }
 
-  // blade against body: a lethal touch ends the round, a harmless one nudges
-  if (ph === 'fight' && !clashed && a.alive && b.alive) {
-    const h1 = bladeContact(a, b), h2 = bladeContact(b, a), k1 = h1 && h1.lethal, k2 = h2 && h2.lethal;
+  // blade against body: a lethal touch ends the round, a harmless one is solid (combat.js).
+  // After a clash nothing kills this tick, but blades still can't sit inside bodies.
+  if (ph === 'fight' && a.alive && b.alive) {
+    const h1 = bladeContact(a, b), h2 = bladeContact(b, a), k1 = !clashed && h1 && h1.lethal, k2 = !clashed && h2 && h2.lethal;
     if (k1) kill(b, h1); if (k2) kill(a, h2);
     if (k1 || k2) roundOver(S, k1, k2);
-    else { if (h1) b.x = clamp(b.x + Math.sign(b.x - a.x || 1) * .6, LEFT, RIGHT); if (h2) a.x = clamp(a.x + Math.sign(a.x - b.x || 1) * .6, LEFT, RIGHT); }
+    else { if (h1) bladePush(a, b, map); if (h2) bladePush(b, a, map); }
   }
 
   updateFlow(S);

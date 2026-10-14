@@ -9,8 +9,17 @@ export const GRAV = 2300, JUMP_V = 780, DJUMP_V = 660, RUN_MAX = 270, CROUCH_MAX
 export const RUN_ACC = 2800, AIR_ACC = 1700, GROUND_FRIC = 2600, AIR_FRIC = 260;
 export const DASH_V = 760, DASH_T = 0.13, DASH_CD = 0.55, SLIDE_T = 0.42, SLIDE_V = 450;
 
-// Blade: length, arm length, how fast a blade must move to kill, and the aim limits (radians)
-export const BLADE = 76, ARM = 24, LETHAL = 600, ANG_MIN = -1.15, ANG_MAX = 1.25;
+// Blade: length, arm length and the aim limits (radians)
+export const BLADE = 76, ARM = 24, ANG_MIN = -1.15, ANG_MAX = 1.25;
+
+// When does a blade kill? (Thrusts are always lethal while the point is live.)
+// LETHAL: any part of the blade kills when it moves this fast (px/s) relative to the body: a swing.
+// TIP_LETHAL: the point (the outer TIP_ZONE of the blade) also kills when it is driven
+//   into the body this fast along the blade's direction: walking or running onto a point.
+export const LETHAL = 600, TIP_LETHAL = 250, TIP_ZONE = 0.15;
+// A harmless contact is solid: the body is shoved out of the blade (at most PUSH_MAX px per
+// tick) and the holder takes PUSH_HOLDER of that shove themselves.
+export const PUSH_MAX = 24, PUSH_HOLDER = 0.25;
 
 // How long a key press is remembered if it can't be used straight away (seconds)
 export const PRESS_BUFFER = 0.13;

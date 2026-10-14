@@ -21,6 +21,9 @@ export function distPtSeg(p, a, b) {
   return Math.hypot(p.x - (a.x + vx * t), p.y - (a.y + vy * t));
 }
 
+// Same, with the segment shifted sideways by ox pixels (used to test pushing a body).
+export const distPtSegX = (p, a, b, ox) => distPtSeg({x: p.x - ox, y: p.y}, a, b);
+
 // Distance between segments a-b and c-d, plus the closest point (used for blade clashes).
 export function segSeg(a, b, c, d) {
   const r = {x: b.x - a.x, y: b.y - a.y}, s = {x: d.x - c.x, y: d.y - c.y}, den = r.x * s.y - r.y * s.x;

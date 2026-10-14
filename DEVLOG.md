@@ -5,7 +5,8 @@
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
-- **Next:** owner playtests online (two windows side by side, then with a friend). Then more maps.
+- **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove.
+- **Next:** owner playtests the new point rules and online (two windows side by side, then with a friend). Then more maps.
 
 ## Roadmap
 1. Online 1v1 with room codes (built; being playtested).
@@ -69,3 +70,18 @@ Owner approved the online plan and PeerJS with its free public server.
 - *Fake bad internet:* add `?lag=ms&jitter=ms&loss=percent` to the address.
 - *Verified* with two real browser windows through the real PeerJS server: full matches to game over plus a rematch at about 1 ms, 143 ms and 240 ms ping (with 3–5% loss). Scores identical on both sides, zero desyncs, no errors. Closing one window shows "Your friend left the match" on the other within 25 ms. Local CPU and 2-player modes still work.
 - *Known limits:* a game in a background tab pauses (browsers stop drawing hidden tabs), so the friend sees "Waiting for your friend…". Test alone with two windows, not two tabs. Keyboard and mouse only reach the focused window.
+
+### 2026-10-14: The point kills; blades are solid
+Owner's request: fencers could walk into each other and the point passed through bodies harmlessly.
+- *The point:* the outer 15% of the blade now kills when it's driven into the body at 250 px/s or more, measured along the blade (so running onto a point, or running a point into someone, kills; standing still or inching forward doesn't). The full run speed is 270 px/s, so a level blade at a run just counts. The rest of the blade still needs a 600 px/s swing; thrusts are still always lethal. A lethal contact anywhere on the blade wins over a harmless one.
+- *Solid blades:* a harmless contact shoves the body sideways out of the blade (away from the holder, unless only the other way clears it) and pushes the holder back by a quarter of the shove; whoever was moving into the blade loses that speed. This also runs on clash ticks, which stops blades staying inside bodies through the clash freeze-frame.
+- *Thresholds* (all in ): , , ,  (px per tick), .
+- *Measured* over 20 CPU-vs-CPU bouts (11 minutes of fighting): ticks with a blade visibly inside a body went from 1,638 to 7 (one 3 px moment during a double-thrust clash). Touches per minute are about the same; about three quarters are now point touches.
+- *Tests:* new checks in Unknown command: "test"
+
+
+Did you mean this?
+  npm test # Test a package
+To see a list of supported npm commands, run:
+  npm help: standing near the point is safe; inching onto it doesn't kill and the point never enters the body; a slow 520 px/s swing down through a body neither kills nor passes through (shoves it 45 px); running onto the point kills (266 px/s). Determinism and all three rollback network tests pass. Browser runs (vs CPU, 2-player) have no errors.
+- Online version bumped to 2, so an old cached copy can't play against the new rules.
