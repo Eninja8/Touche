@@ -15,8 +15,6 @@ function range(g, a, base, seed, step, minH, maxH, color, cap) {
 function pine(g, x, base, h, color) { for (let k = 0; k < 3; k++) { const w = h * (.42 - k * .1), y = base - k * h * .28; poly(g, color, [x - w, y, x, y - h * .5, x + w, y]); } rect(g, color, x - 2, base, 4, 10); }
 
 export default {
-  pitColor: dark => dark ? '#06182a' : '#5d88a8',
-  spikes: {fill: '#dff3ff', edge: '#7fb3d6', size: 11},
   ropeColor: null,
   layers: [
     { // sky: pale sun, or stars and an aurora
@@ -55,7 +53,7 @@ export default {
       line(ctx, snow, 3, [tx + d * 6, 326, tx + d * 80, r.y0 - 8, r.x + d * 24, r.y0 - 6], .9);
     }
   },
-  block(ctx, s, col, dark) {
+  block(ctx, s, col, dark, map) {
     const rock = dark ? '#1b2533' : '#6f7e8c', rock2 = dark ? '#141c27' : '#5b6875', snow = dark ? '#c9dcec' : '#ffffff';
     if (s.look === 'ice') {
       const g = ctx.createLinearGradient(0, s.y, 0, s.y + s.h); g.addColorStop(0, dark ? '#3b6a8f' : '#cfe7f6'); g.addColorStop(.2, dark ? '#1f3850' : '#a9cde6'); g.addColorStop(1, dark ? '#0b1a2a' : '#6f9fc2');
@@ -65,8 +63,9 @@ export default {
       line(ctx, dark ? '#d8ecfa' : '#ffffff', 2.5, [s.x, s.y, s.x + s.w, s.y]); line(ctx, col.line, 1.5, [s.x, s.y + 1, s.x + s.w, s.y + 1], .4);
       return;
     }
-    // rock (walls, overhangs) and snowy banks
-    rect(ctx, rock, s.x, s.y, s.w, s.h + 300);
+    // rock (walls, overhangs) and snowy banks; only blocks that reach the bottom of the map
+    // are drawn past it (an overhang drawn longer would look like wall where there's open air)
+    rect(ctx, rock, s.x, s.y, s.w, s.h + (s.y + s.h >= map.height ? 300 : 0));
     for (let k = 0; k < s.w * s.h / 2500; k++) { const x = s.x + hash(k * 3 + s.x) * s.w, y = s.y + hash(k * 5 + s.y) * s.h; poly(ctx, rock2, [x, y, x + 26, y + 8, x + 8, y + 30], .7); }
     if (s.y > 0) { // a snow cap on any exposed top
       ctx.fillStyle = snow; ctx.beginPath(); ctx.moveTo(s.x - 4, s.y + 8);

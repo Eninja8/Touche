@@ -23,7 +23,6 @@ function masonry(g, a, dark, rowH, colW, alpha) {
 }
 
 export default {
-  pitColor: dark => dark ? '#050407' : '#2b2620',
   chainColor: null,
   layers: [
     { // the far wall: masonry, windows, the great tapestry

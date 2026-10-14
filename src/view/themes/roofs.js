@@ -19,8 +19,6 @@ function skyline(g, a, base, seed, minH, maxH, color, win, winA, detail) {
 }
 
 export default {
-  pitColor: dark => dark ? '#04050b' : '#3b2930',
-  spikes: {fill: null, edge: null, size: 9},
   chainColor: null,
   layers: [
     { // sky, sun or moon, stars

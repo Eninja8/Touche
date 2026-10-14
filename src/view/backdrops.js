@@ -6,9 +6,11 @@
 //   layers: [{depth, res, draw(g, map, area, dark)}] static backgrounds, back to front
 //   back(ctx, map, col, v, dark, t) / front(...): drawn every frame, behind / in front of the fencers
 //   block, platform, cover: how solid blocks, platforms and pit covers look (else arena.js defaults)
+//   haze(dark): optional [colour, alpha] laid over the background so the arena stands out (edges.js)
 
 import {parallax} from './paint.js';
 import {drawArena} from './arena.js';
+import {haze} from './edges.js';
 import castle from './themes/castle.js';
 import roofs from './themes/roofs.js';
 import forge from './themes/forge.js';
@@ -23,6 +25,7 @@ export function drawBack(ctx, map, v, dark, t) {
   const th = THEMES[map.theme] || castle, col = map.colors[dark ? 'dark' : 'light'];
   th.layers.forEach((L, k) => parallax(ctx, map.theme + (dark ? ':dark' : ':light'), map, {depth: L.depth, res: L.res, draw: (g, m, area) => L.draw(g, m, area, dark)}, k));
   if (th.back) th.back(ctx, map, col, v, dark, t);
+  haze(ctx, v, col, dark, th);
   drawArena(ctx, map, th, col, v, dark, t);
 }
 

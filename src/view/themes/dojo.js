@@ -15,8 +15,6 @@ function blossomTree(g, x, base, h, dark) {
 }
 
 export default {
-  pitColor: dark => dark ? '#0d0906' : '#3a2a1a',
-  spikes: {fill: '#c9b46a', edge: '#5a4a1f', size: 9},
   ropeColor: null,
   layers: [
     { // the garden outside

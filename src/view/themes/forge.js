@@ -13,8 +13,6 @@ function gear(g, x, y, r, teeth, color) {
 }
 
 export default {
-  pitColor: dark => dark ? '#7a2408' : '#b4481a',
-  spikes: {fill: '#4a3a34', edge: '#1f1410', hot: 'rgba(255,140,40,.9)', size: 9},
   chainColor: null,
   layers: [
     { // back wall: bricks, arched windows, gears

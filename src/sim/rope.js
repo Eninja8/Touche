@@ -11,7 +11,7 @@ import {JUMP_V} from './constants.js';
 import {emit} from './events.js';
 
 export const GRIP = 100;          // the hands hold the rope this far above the feet
-export const CLIMB_UP = 190, CLIMB_DOWN = 300; // climbing speeds (px/s)
+export const CLIMB_UP = 240, CLIMB_DOWN = 375; // climbing speeds (px/s)
 export const ROPE_JUMP_V = 700, ROPE_JUMP_X = 360, ROPE_CD = .3; // jumping off; seconds before you can grab again
 const REACH = 10;                 // how close (sideways) you must pass to grab
 
@@ -54,6 +54,6 @@ export function hang(f, i, dir, map, dt) {
   f.y = Math.max(f.y, ropeTop(r));
   f.x = r.x - f.face * 5; f.vx = 0; f.vy = 0;
   f.onGround = false; f.climbing = climb !== 0 && f.y > ropeTop(r);
-  if (f.climbing) f.phase += dt * 9;
+  if (f.climbing) f.phase += dt * 11;
   return true;
 }

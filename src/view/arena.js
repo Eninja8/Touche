@@ -1,25 +1,31 @@
 // Paints the playable parts of a map, the same way on every map unless the map's
 // theme (src/view/themes/) supplies its own look: pits, solid blocks, the floors that
 // cover pits when hazards are off, spikes, platforms, ropes/chains/ladders, and pads.
+// Pits and spikes always use the shared danger look (hazards.js), and every block and
+// platform gets the shared edge rim (edges.js), so all maps read the same way.
 
-import {rect, line, poly, glow, hash, vgrad} from './paint.js';
+import {rect, line, glow} from './paint.js';
+import {pitVoid, pitLips, spikes} from './hazards.js';
+import {rim, platformRim} from './edges.js';
 
 // th: the theme; col: the map's colours for this mode; v: visible area; t: seconds
 export function drawArena(ctx, map, th, col, v, dark, t) {
-  for (const p of map.pits) pitShaft(ctx, p, th, col, dark);
+  for (const p of map.pits) if (map.hazards) pitVoid(ctx, p, map, dark, t); else filledPit(ctx, map, p, th, col, dark, t);
   for (const s of map.solids) if (s.look !== 'cover' && s.look !== 'pitFloor') (th.block || block)(ctx, s, col, dark, map, t);
   for (const s of map.covers) (th.cover || cover)(ctx, s, col, dark);
-  for (const k of map.spikes) spikes(ctx, k, th.spikes || {}, col, dark, t);
-  for (const p of map.platforms) (th.platform || platform)(ctx, p, col, dark, t);
+  for (const s of map.solids) if (s.look !== 'pitFloor') rim(ctx, map, s, col, dark);
+  if (map.hazards) for (const p of map.pits) pitLips(ctx, p, map, dark, t);
+  for (const k of map.spikes) spikes(ctx, k, dark, t);
+  for (const p of map.platforms) { (th.platform || platform)(ctx, p, col, dark, t); platformRim(ctx, p, col, dark); }
   for (const r of map.ropes) rope(ctx, r, col, dark, t, th);
   for (const p of map.pads) pad(ctx, p, col, t);
 }
 
-// A pit: a dark shaft between the floors, darkest at the bottom.
-function pitShaft(ctx, p, th, col, dark) {
-  const deep = th.pitColor ? th.pitColor(dark) : dark ? '#050608' : '#2a2620';
-  vgrad(ctx, p.x, p.y, p.w, p.d + 40, [col.floor, deep, deep]);
-  rect(ctx, '#000', p.x, p.y, 6, p.d + 40, .25); rect(ctx, '#000', p.x + p.w - 6, p.y, 6, p.d + 40, .25);
+// Hazards off: a pit is painted like the floor beside it (a covered pit must never look
+// like a hole); the boards over it (cover) are drawn on top.
+function filledPit(ctx, map, p, th, col, dark, t) {
+  const n = map.solids.find(s => Math.abs(s.y - p.y) < .5 && s.look !== 'cover' && (Math.abs(s.x + s.w - p.x) < .5 || Math.abs(s.x - p.x - p.w) < .5));
+  if (n) (th.block || block)(ctx, {...n, x: p.x, w: p.w}, col, dark, map, t);
 }
 
 // A plain block: filled, with an outlined top edge.
@@ -34,25 +40,6 @@ function cover(ctx, s, col) {
   for (let x = s.x; x < s.x + s.w; x += 14) rect(ctx, col.platform, x + 1, s.y, 12, 9);
   line(ctx, col.line, 2, [s.x, s.y, s.x + s.w, s.y], .9);
   line(ctx, col.line, 1.5, [s.x, s.y + 9, s.x + s.w, s.y + 9], .5);
-}
-
-// Spikes fill box k, pointing k.dir. o: {fill, edge, hot (glowing tips colour), size}
-function spikes(ctx, k, o, col, dark, t) {
-  const fill = o.fill || (dark ? '#aab3bf' : '#5f6772'), edge = o.edge || col.line, size = o.size || 10;
-  const along = k.dir === 'up' || k.dir === 'down', len = along ? k.w : k.h, n = Math.max(1, Math.round(len / size)), step = len / n;
-  ctx.lineJoin = 'round';
-  for (let j = 0; j < n; j++) {
-    const a = j * step, b = a + step, m = a + step / 2, jit = (hash(j + k.x) - .5) * 3;
-    let pts;
-    if (k.dir === 'up') pts = [k.x + a, k.y + k.h, k.x + m + jit, k.y, k.x + b, k.y + k.h];
-    else if (k.dir === 'down') pts = [k.x + a, k.y, k.x + m + jit, k.y + k.h, k.x + b, k.y];
-    else if (k.dir === 'left') pts = [k.x + k.w, k.y + a, k.x, k.y + m + jit, k.x + k.w, k.y + b];
-    else pts = [k.x, k.y + a, k.x + k.w, k.y + m + jit, k.x, k.y + b];
-    poly(ctx, fill, pts);
-    ctx.strokeStyle = edge; ctx.lineWidth = 1.2; ctx.globalAlpha = .7; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); ctx.lineTo(pts[2], pts[3]); ctx.lineTo(pts[4], pts[5]); ctx.stroke(); ctx.globalAlpha = 1;
-    if (o.hot) glow(ctx, pts[2], pts[3], 7, o.hot, .5 + .2 * Math.sin(t * 5 + j), dark);
-  }
-  if (k.dir === 'up') rect(ctx, edge, k.x, k.y + k.h - 2, k.w, 2, .6);
 }
 
 // A one-way platform: a thin plank you can jump up through.
