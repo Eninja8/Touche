@@ -29,7 +29,7 @@ import {showScreen, hideScreens, onBack} from '../ui/screens.js';
 import {openLobby, lobbyValues, setLobbyValues, setLobbyStatus, setLobbyError, setStartEnabled, setReadyButton} from '../ui/lobby.js';
 import {onKill, hasRagdoll, undoKill, confirmKills, updateFx} from '../view/fx.js';
 
-const PROTOCOL = 5;          // bump when online play or gameplay changes, so mismatched versions refuse to play
+const PROTOCOL = 6;          // bump when online play or gameplay changes, so mismatched versions refuse to play
 const TIMEOUT_MS = 5000;     // no message for this long = disconnected
 const PING_MS = 500, RESEND_MS = 300, STALL_NOTE_MS = 500;
 const IDLE = [decode(EMPTY), decode(EMPTY)];

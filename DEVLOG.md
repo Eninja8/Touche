@@ -6,13 +6,13 @@
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
-- **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove. **Beats:** a blade swung at `BEAT_SPEED` = 450 px/s or more into a blade moving at most `BEAT_RATIO` = 0.5 of that is knocked `BEAT_KNOCK` = 1.3 rad wide and harmless for `BEAT_OPEN` = 0.35 s.
-- **Next:** owner playtests Phase B. Then Phase C (maps and hazards), Phase D (power-ups), stopping after each for a playtest.
+- **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove. **Beats:** a blade swung at `BEAT_SPEED` = 450 px/s or more into a blade moving at most `BEAT_RATIO` = 0.5 of that is knocked `BEAT_KNOCK` = 1.3 rad wide and harmless for `BEAT_OPEN` = 0.35 s. The beating swing can't kill until it slows below `BEAT_SPEED`; the same player can't beat again for `BEAT_CD` = 0.6 s; a blade swinging back into the beat at `BEAT_MEET` = 200 px/s or more makes it a normal clash.
+- **Next:** owner playtests Phase C. Then Phase D (power-ups), stopping after each for a playtest.
 
 ## Roadmap
 1. Online 1v1 with room codes (built; being playtested).
 2. Phase A: menus and UI cleanup (done).
-3. Phase B: combat tuning (built; being playtested).
+3. Phase B: combat tuning (done).
 4. Phase C: maps and hazards (Frozen Lake, Rooftops, Dojo, Forge; ring-out; Hazards on/off; speed and jump pads; random map options).
 5. Phase D: power-ups (Swift, Long Blade, Air Dash, Throwing Knife; Power-ups on/off).
 6. Controller support (Gamepad API). Not started.
@@ -126,3 +126,26 @@ Owner's request: fencers could walk into each other and the point passed through
 - *Look and sound:* a quick ring burst with pale streaks, a "BEAT" label in the attacker's colour, a short freeze, a sharper "tak-ting" sound, and the beaten blade drawn faded while it's harmless.
 - *CPU:* on Normal and Hard it sometimes swings hard through a nearby, still point on purpose (6% / 12% per decision when in reach), and it presses the attack while your blade is beaten aside. Beats also happen naturally whenever a full-speed swing crosses a still blade.
 - *Tests* (`npm test`): a fast swing into a still blade is a beat (knocked 1.3 rad wide, harmless 0.35 s, nobody touched); running a still blade into another is a normal clash; a thrust into a still blade is still a parry. All rollback network tests pass. Two-window online test at about 145 ms ping with 3% loss: scores matched and there were no errors. Online version bumped to 5.
+
+**Phase B playtest feedback** (owner): slide defence feels good (the CPU retreating is cool); the 0.35 s opening is fine; beats were overpowered: swinging up and down while walking forward killed the CPU most of the time, even on Hard.
+
+**Beat fixes:**
+1. *A beat is not a kill:* after landing a beat, the attacker's swing can't kill until the blade slows below the beat speed (`swingLock`). The follow-up has to be a thrust or the point.
+2. *Cooldown:* a second beat by the same player within 0.6 s (`BEAT_CD`) is a normal clash.
+3. *Meeting a swing:* if the other blade is swinging back into the beat at 200 px/s or more (`BEAT_MEET`), it's a normal clash.
+4. *Swing speed* now measures only the fencer's own aiming. Being knocked by a clash used to register as a "swing" (over 6000 px/s for one tick), so a knocked blade springing back could have beaten someone.
+5. *CPU vs wild swinging:* it tracks how much you've been swinging hard lately. Then, scaled by difficulty:
+   - It thrusts when your blade is out of line or you're on beat cooldown (punish: easy 20%, normal 50%, hard 60%).
+   - Otherwise it backs out of reach (10 / 30 / 30%) or swings back into your blade (5 / 15 / 15%).
+- *Measured* (scripted player walking forward whipping the blade at full mouse speed, 200 rounds):
+  - Player wins against Hard went from 64% to about 40%. That's the same as simply walking forward with a still point (35–41%), so swinging no longer adds an edge.
+  - Normal ~31–45%, Easy ~44%.
+  - Slide defence is unchanged: deaths to slides easy 27%, normal 11%, hard 5%.
+- *Tests* (`npm test`):
+  - After a beat, the swing is locked and beating is on cooldown.
+  - A beat followed by a thrust still lands the touch.
+  - A second beat within the cooldown is a normal clash.
+  - Meeting a swing (300 px/s the other way) is a clash, not a beat.
+  - A 950 px/s mouse swing that beats a blade and carries on through the body doesn't kill (it shoves the body 35 px).
+  - Swing-spamming forward wins 39% against Hard (must stay under 50%).
+- Online version bumped to 6.

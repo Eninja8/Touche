@@ -1,6 +1,6 @@
 // Blade-on-body hits, blade-on-blade clashes, parries and kills.
 
-import {DT, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS, BEAT_SPEED, BEAT_RATIO, BEAT_KNOCK, BEAT_OPEN} from './constants.js';
+import {DT, ARM, BLADE, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS, BEAT_SPEED, BEAT_RATIO, BEAT_KNOCK, BEAT_OPEN, BEAT_CD, BEAT_MEET} from './constants.js';
 import {clamp, lerp, distPtSeg, distPtSegX} from './util.js';
 import {bodyParts, lungeActive} from './fighter.js';
 import {emit} from './events.js';
@@ -24,7 +24,7 @@ export function bladeContact(A, B) {
       if (distPtSeg(p, q.a, q.b) < q.r + REACH || distPtSeg(mid, q.a, q.b) < q.r + REACH) {
         const vx = (p.x - pp.x) / DT - B.vx, vy = (p.y - pp.y) / DT - B.vy, sp = Math.hypot(vx, vy);
         const tip = .3 + .7 * k / SAMPLES >= 1 - TIP_ZONE, closing = vx * PA.dx + vy * PA.dy;
-        const lethal = !!lungeActive(A) || (A.noLethal <= 0 && (sp >= LETHAL || (tip && closing >= TIP_LETHAL)));
+        const lethal = !!lungeActive(A) || (A.noLethal <= 0 && ((sp >= LETHAL && !A.swingLock) || (tip && closing >= TIP_LETHAL)));
         const hit = {p, vx, vy, sp, part: q.n, tip, lethal};
         if (lethal) return hit;
         harmless = harmless || hit;
@@ -76,7 +76,7 @@ export function clash(S, A, B, pt) {
   S.clashCD = .14; A.noLethal = B.noLethal = .14;
   const aAct = A.lunge && A.lunge.t >= .03 && A.lunge.t < .2, bAct = B.lunge && B.lunge.t >= .03 && B.lunge.t < .2;
   const fast = A.swingSpeed >= B.swingSpeed ? A : B, slow = fast === A ? B : A;
-  if (!aAct && !bAct && fast.swingSpeed >= BEAT_SPEED && slow.swingSpeed <= fast.swingSpeed * BEAT_RATIO) { beat(S, fast, slow, pt); return; }
+  if (!aAct && !bAct && isBeat(fast, slow)) { beat(S, fast, slow, pt); return; }
   emit('sparks', {x: pt.x, y: pt.y, n: 16}); emit('shake', {amount: 5});
   S.hitstop = HITSTOP_TICKS;
   if (aAct && !bAct) parry(A, B, pt);
@@ -88,14 +88,26 @@ export function clash(S, A, B, pt) {
   }
 }
 
+// World-space velocity of a blade's point from its swing alone (px/s).
+const swingVel = f => { const a = f.angle, v = f.swingRate * (ARM + BLADE); return {x: -f.face * Math.sin(a) * v, y: -Math.cos(a) * v}; };
+
+// Is F's swing a beat on V's blade? (See BEAT_* in constants.js.)
+export function isBeat(F, V) {
+  if (F.swingSpeed < BEAT_SPEED || F.beatCD > 0 || V.swingSpeed > F.swingSpeed * BEAT_RATIO) return false;
+  const f = swingVel(F), v = swingVel(V);
+  const meeting = V.swingSpeed >= BEAT_MEET && f.x * v.x + f.y * v.y < 0; // V swings back into F's blade
+  return !meeting;
+}
+
 // F's fast blade knocked S's slower blade wide (the way F was swinging): S can't kill
-// or thrust for a moment, which is F's opening. F's own blade is only briefly harmless.
+// or thrust for a moment, which is F's opening. F's swing itself can't kill until it slows
+// down, and F can't beat again for BEAT_CD seconds.
 function beat(S, F, V, pt) {
   const down = F.P.tip.y > F.prevTip.y; // F was swinging downward
   V.deflect += down ? -BEAT_KNOCK : BEAT_KNOCK;
   V.noLethal = BEAT_OPEN; V.beatT = BEAT_OPEN; V.lungeCD = Math.max(V.lungeCD, BEAT_OPEN);
   if (V.lunge) V.lunge = null;
-  F.noLethal = .08;
+  F.beatCD = BEAT_CD; F.swingLock = true;
   S.hitstop = Math.ceil(HITSTOP_TICKS / 2);
   emit('beat', {x: pt.x, y: pt.y}); emit('shake', {amount: 3});
   emit('text', {x: pt.x, y: pt.y - 24, text: 'BEAT', color: F.id ? 'green' : 'red'});

@@ -25,8 +25,11 @@ export const PUSH_MAX = 24, PUSH_HOLDER = 0.25;
 // (measured from how fast the blade turns, so carrying a still blade at a run doesn't count)
 // while the other moves at most BEAT_RATIO of that speed, the slower blade is knocked
 // BEAT_KNOCK radians wide and can't kill (or thrust) for BEAT_OPEN seconds.
-// (Thrusts meeting a blade are parries instead, as before.)
-export const BEAT_SPEED = 450, BEAT_RATIO = 0.5, BEAT_KNOCK = 1.3, BEAT_OPEN = 0.35;
+// It's a normal clash instead if: either blade is thrusting (a parry), the beater beat
+// within the last BEAT_CD seconds, or the other blade is swinging back into it at
+// BEAT_MEET px/s or more. The beating swing itself can't kill until it slows below
+// BEAT_SPEED: the follow-up has to be a thrust or the point.
+export const BEAT_SPEED = 450, BEAT_RATIO = 0.5, BEAT_KNOCK = 1.3, BEAT_OPEN = 0.35, BEAT_CD = 0.6, BEAT_MEET = 200;
 
 // How long a key press is remembered if it can't be used straight away (seconds)
 export const PRESS_BUFFER = 0.13;

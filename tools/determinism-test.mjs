@@ -13,7 +13,8 @@ import {createGame, newMatch, step, snapshot} from '../src/sim/game.js';
 import {drain} from '../src/sim/events.js';
 import {bodyParts} from '../src/sim/fighter.js';
 import {distPtSeg} from '../src/sim/util.js';
-import {TIP_LETHAL} from '../src/sim/constants.js';
+import {TIP_LETHAL, LETHAL} from '../src/sim/constants.js';
+import {isBeat} from '../src/sim/combat.js';
 
 const simDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/sim');
 let failed = false;
@@ -137,6 +138,64 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
   run(G, keys(), keys(), 30, seen); seen = [];
   run(G, keys({presses: ['attack']}), keys(), 1, seen); run(G, keys(), keys(), 40, seen);
   check(seen.includes('PARRY') && !seen.includes('beat'), 'a thrust into a still blade is still a parry');
+
+  // a deliberate beat followed by a thrust kills; a second beat straight after is only a clash
+  const beatThenThrust = () => {
+    const G = setup(), seen = [], kills = [];
+    const go = (red, n) => run(G, red, keys(), n, seen);
+    go(keys({lower: true}), 60);
+    while (G.F[1].x - G.F[0].x > 150) run(G, keys({lower: true}), keys({left: true}), 1, seen);
+    go(keys({lower: true}), 30); seen.length = 0;
+    for (let k = 0; k < 60 && !seen.includes('beat'); k++) go(keys({raise: true}), 1);
+    return {G, seen, go};
+  };
+  {
+    const {G, seen, go} = beatThenThrust();
+    check(G.F[0].swingLock && G.F[0].beatCD > .5, 'after a beat, the beater\'s swing is locked (can\'t kill) and beating is on cooldown');
+    go(keys({lower: true}), 8); go(keys({presses: ['attack']}), 1); go(keys(), 40);
+    check(!G.F[1].alive && G.F[0].alive, 'a beat followed by a thrust still lands the touch');
+  }
+  {
+    const {G, seen, go} = beatThenThrust(); seen.length = 0;
+    go(keys({lower: true}), 10); go(keys(), 30); // dip below Green's blade and let it settle back...
+    for (let k = 0; k < 30 && !seen.includes('sfx:clash') && !seen.includes('beat'); k++) go(keys({raise: true}), 1); // ...then swing up through it again
+    check(seen.includes('sfx:clash') && !seen.includes('beat') && G.F[0].beatCD > 0, `a second beat within the cooldown is only a normal clash (${G.F[0].beatCD.toFixed(2)} s of cooldown left)`);
+  }
+  // swinging back into a swing is a clash; a still or same-way blade gets beaten (fake fencers, both facing each other)
+  const fencer = (face, rate) => ({face, angle: 0, deflect: 0, swingRate: rate, swingSpeed: Math.abs(rate) * 100, beatCD: 0});
+  check(!isBeat(fencer(1, 9.5), fencer(-1, -3)) && isBeat(fencer(1, 9.5), fencer(-1, 3)) && isBeat(fencer(1, 9.5), fencer(-1, 0)), 'meeting a swing with your own blade (300 px/s the other way) is a clash, not a beat');
+}
+
+// 7. the swing that lands a beat can't kill: a fast mouse swing beats a blade, then carries on through the body
+{
+  const G = createGame(1); newMatch(G, {demo: false, vsCPU: false, seed: 13});
+  const idle = {left: false, right: false, up: false, down: false, raise: false, lower: false};
+  const cmd = (aim, held = idle) => [{held, presses: [], aim}, {held: idle, presses: [], aim: null}];
+  const kills = [], beats = [];
+  const run = (aim, n, held) => { for (let k = 0; k < n; k++) { step(G, cmd(aim, held)); for (const e of drain()) { if (e.type === 'kill') kills.push(e); if (e.type === 'beat') beats.push(e); } } };
+  run({x: 100, y: 130}, 200);                                          // countdown; Red's blade points down
+  while (G.F[1].x - G.F[0].x > 135) run({x: 100, y: 130}, 1, {...idle, right: true});
+  run({x: 100, y: 130}, 30);
+  for (let k = 0; k < 40 && !beats.length; k++) run({x: 100, y: -130}, 1); // whip it up through Green's blade
+  // the beat freezes play for a moment: step Green in close, so the rest of the swing goes through them
+  const g = G.F[1], shift = -45; g.x += shift; for (const k in g.P) if (g.P[k] && g.P[k].x !== undefined) g.P[k].x += shift; g.prevHand.x += shift; g.prevTip.x += shift;
+  const x0 = g.x; let swing = 0;
+  for (let k = 0; k < 30; k++) { run({x: 100, y: -130}, 1); swing = Math.max(swing, G.F[0].swingSpeed); }
+  check(beats.length === 1, `the fast swing (${Math.round(swing)} px/s, ${LETHAL} kills) beat Green's blade`);
+  check(kills.length === 0 && g.alive && Math.abs(g.x - x0) > 3, `the same swing carrying on through Green did not kill (it shoved Green ${Math.round(Math.abs(g.x - x0))} px instead)`);
+}
+
+// 8. swing-spam: walking forward whipping the blade up and down must not beat the Hard CPU most of the time
+{
+  const G = createGame(1); newMatch(G, {vsCPU: true, diff: 'hard', target: 1e9, seed: 7});
+  let t = 0, rounds = 0, wins = 0;
+  while (rounds < 120) {
+    const toward = Math.sign(G.F[1].x - G.F[0].x) || 1, up = Math.floor(++t / 26) % 2 === 0;
+    const held = {left: toward < 0, right: toward > 0, up: false, down: false, raise: false, lower: false};
+    step(G, [{held, presses: [], aim: {x: 110 * toward, y: up ? -120 : 120}}, null]);
+    for (const e of drain()) if (e.type === 'callout' && e.ko) { rounds++; if (G.koWho === 0) wins++; }
+  }
+  check(wins / rounds < .5, `swing-spamming forward wins ${Math.round(100 * wins / rounds)}% of rounds against the Hard CPU (was 64% before the beat fixes)`);
 }
 
 console.log(failed ? '\nSome checks FAILED.' : '\nAll checks passed.');

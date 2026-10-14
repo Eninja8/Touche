@@ -80,7 +80,7 @@ function drawFighter(f, look) {
   ctx.restore(); ctx.globalAlpha = 1;
   // a beaten blade is drawn faded while it's knocked aside and harmless
   if (f.beatT > 0) ctx.globalAlpha = .4;
-  drawBlade(P, col, lungeActive(f) || (f.tipSpeed >= LETHAL * .85 && f.noLethal <= 0));
+  drawBlade(P, col, lungeActive(f) || (f.tipSpeed >= LETHAL * .85 && f.noLethal <= 0 && !f.swingLock));
   ctx.globalAlpha = 1;
   ctx.strokeStyle = col; line([P.sh, P.elbow, P.hand], 5);
   // stun stars
