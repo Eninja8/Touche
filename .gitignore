@@ -19,3 +19,7 @@ desktop.ini
 
 # Claude Code's per-machine settings
 .claude/settings.local.json
+
+# test browser profiles and screenshots from local testing
+chrome-cdp-*/
+/*.png
