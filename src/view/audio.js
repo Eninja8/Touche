@@ -36,6 +36,8 @@ function noise(dur, vol, ft, f0, f1) {
 
 const SFX = {
   clash() { tone(1850, .22, 'triangle', .16); tone(2780, .16, 'sine', .09); noise(.05, .18, 'highpass', 3500); },
+  grab() { noise(.06, .1, 'lowpass', 700); tone(180, .05, 'triangle', .05); },
+  spike() { noise(.12, .3, 'lowpass', 1400, 300); tone(90, .25, 'sine', .25, 50); },
   pad() { tone(220, .22, 'triangle', .14, 880); noise(.12, .08, 'bandpass', 600, 2400); },
   beat() { tone(3300, .07, 'square', .05); tone(1500, .14, 'triangle', .14, 800); noise(.035, .22, 'highpass', 5200); },
   parry() { tone(2300, .3, 'triangle', .18); tone(3450, .22, 'sine', .1); noise(.06, .2, 'highpass', 4000); },

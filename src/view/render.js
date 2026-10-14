@@ -1,5 +1,7 @@
-// Draws one frame: the map, blood decals, ragdolls, fighters, particles, callouts.
-// Reads the game state but never changes it.
+// Draws one frame: the map, blood decals, ragdolls, fighters, particles, the map's
+// foreground, then callouts and the map name. Reads the game state but never changes it.
+// The arena is drawn through the follow camera (camera.js); text is drawn on top in
+// screen space, so it stays the same size whatever the zoom.
 
 import {LETHAL} from '../sim/constants.js';
 import {lungeActive} from '../sim/fighter.js';
@@ -7,7 +9,8 @@ import {getMap} from '../sim/maps.js';
 import {settings} from '../ui/settings.js';
 import {C, isDark} from './theme.js';
 import {fx, ragdolls, swords, looks, view, decals} from './fx.js';
-import {drawMap} from './backdrops.js';
+import {drawBack, drawFront} from './backdrops.js';
+import {cam, updateCamera, viewRect} from './camera.js';
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d'), stage = document.getElementById('stage');
 function resize() {
@@ -16,27 +19,27 @@ function resize() {
 }
 new ResizeObserver(resize).observe(stage); resize();
 
-// The map is a fixed size in arena pixels (the same for every player, which
-// keeps online play fair). It's scaled to fit the window and centred; the
-// visible area beyond it (vis) is painted as more of the map, so there are no black bars.
-let scale = 1, ox = 0, oy = 0;
-const vis = {x0: 0, y0: 0, x1: 0, y1: 0};
-function fit(map) {
-  scale = Math.min(cv.width / map.width, cv.height / map.height); ox = (cv.width - map.width * scale) / 2; oy = (cv.height - map.height * scale) / 2;
-  vis.x0 = -ox / scale; vis.y0 = -oy / scale; vis.x1 = (cv.width - ox) / scale; vis.y1 = (cv.height - oy) / scale;
-}
+// Text is laid out on a virtual 960 x 540 screen, scaled to fit the canvas and centred.
+const UI_W = 960, UI_H = 540;
+function screenSpace() { const k = Math.min(cv.width / UI_W, cv.height / UI_H); ctx.setTransform(k, 0, 0, k, (cv.width - UI_W * k) / 2, (cv.height - UI_H * k) / 2); return k; }
 
 function line(pts, w) { ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y); ctx.stroke(); }
 
-// The map itself (backdrop, floor, platforms, pads...) is painted by backdrops.js.
-
-// The map's name, shown briefly at the start of a round, just under the scoring box.
-function drawMapLabel(map) {
-  const l = view.mapLabel; if (!l) return;
-  const a = l.t < .2 ? l.t / .2 : l.t > 1.3 ? Math.max(0, 1 - (l.t - 1.3) / .4) : 1;
-  ctx.save(); ctx.globalAlpha = a; ctx.font = '700 24px "Big Shoulders Display", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.lineWidth = 6; ctx.strokeStyle = C.hall; ctx.lineJoin = 'round'; const s = l.text.toUpperCase().split('').join(String.fromCharCode(8202));
-  ctx.strokeText(s, map.width / 2, 104); ctx.fillStyle = C.ink; ctx.fillText(s, map.width / 2, 104); ctx.restore();
+// The map's name: big at the start of a round, then small in the bottom-left corner for the
+// rest of the round, so you always know where you are.
+const spaced = t => t.toUpperCase().split('').join(String.fromCharCode(8202));
+function drawMapLabel(S, map) {
+  if (S.mode.demo) return;
+  const l = view.mapLabel, big = l ? (l.t < .25 ? l.t / .25 : l.t > 1.9 ? Math.max(0, 1 - (l.t - 1.9) / .5) : 1) : 0;
+  ctx.save(); ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  if (big > 0) {
+    ctx.globalAlpha = big; ctx.textAlign = 'center'; ctx.font = '900 44px "Big Shoulders Display", Impact, sans-serif';
+    ctx.lineWidth = 8; ctx.strokeStyle = C.hall; ctx.strokeText(spaced(map.name), UI_W / 2, 104); ctx.fillStyle = C.ink; ctx.fillText(spaced(map.name), UI_W / 2, 104);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0); const px = Math.max(1, cv.height / 540);
+  ctx.globalAlpha = .75 * (1 - big); ctx.textAlign = 'left'; ctx.font = `700 ${Math.round(15 * px)}px "Big Shoulders Display", Impact, sans-serif`;
+  const ly = cv.height - 16 * px; ctx.lineWidth = 4 * px; ctx.strokeStyle = C.hall; ctx.strokeText(spaced(map.name), 14 * px, ly); ctx.fillStyle = C.ink; ctx.fillText(spaced(map.name), 14 * px, ly);
+  ctx.restore();
 }
 
 function drawBlade(P, col, hot) {
@@ -108,10 +111,10 @@ function drawFx() {
   ctx.globalAlpha = 1;
 }
 
-function drawCallout(map) {
+function drawCallout() {
   const c = view.callout; if (!c) return;
   const k = c.t / c.dur, pop = k < .15 ? 1.25 - k / .15 * .25 : 1, a = k > .75 ? 1 - (k - .75) / .25 : 1;
-  ctx.save(); ctx.translate(map.width / 2, 175); ctx.scale(pop, pop); ctx.globalAlpha = Math.max(0, a);
+  ctx.save(); ctx.translate(UI_W / 2, 175); ctx.scale(pop, pop); ctx.globalAlpha = Math.max(0, a);
   ctx.font = '900 92px "Big Shoulders Display", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineWidth = 10; ctx.strokeStyle = C.hall; ctx.lineJoin = 'round'; ctx.strokeText(c.text, 0, 0);
   ctx.fillStyle = c.color; ctx.fillText(c.text, 0, 0); ctx.restore(); ctx.globalAlpha = 1;
@@ -131,16 +134,31 @@ function drawAimArrow(S, aim) {
   ctx.stroke(); ctx.globalAlpha = 1;
 }
 
+// What the camera keeps in view: each fencer (head to feet), or their body after a touch.
+function focusPoints(S) {
+  const pts = [];
+  for (const f of S.F) if (f && f.alive && f.P) pts.push({x: f.x, y: f.y}, {x: f.P.head.x, y: f.P.head.y - 12});
+  for (const r of ragdolls) pts.push({x: r.pts.hip.x, y: r.pts.hip.y + 40}, {x: r.pts.hip.x, y: r.pts.hip.y - 60});
+  return pts;
+}
+
+let lastT = performance.now();
 // aim: {p, x, y} aim offset of the local mouse player, or null.
 export function render(S, aim) {
-  const map = getMap(S); fit(map);
+  const now = performance.now(), rdt = Math.min(.1, (now - lastT) / 1000), t = now / 1000; lastT = now;
+  const map = getMap(S), dark = isDark();
+  updateCamera(map, focusPoints(S), cv.width, cv.height, rdt);
+  const v = viewRect(cv.width, cv.height);
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = C.hall; ctx.fillRect(0, 0, cv.width, cv.height);
-  ctx.setTransform(scale, 0, 0, scale, ox, oy);
+  ctx.setTransform(cam.s, 0, 0, cam.s, cv.width / 2 - cam.x * cam.s, cv.height / 2 - cam.y * cam.s);
   const sk = settings.shake ? view.shake : 0, sx = sk ? (Math.random() * 2 - 1) * sk : 0, sy = sk ? (Math.random() * 2 - 1) * sk : 0;
   ctx.save(); ctx.translate(sx, sy);
-  drawMap(ctx, map, vis, isDark(), performance.now() / 1000); ctx.drawImage(decals, 0, 0, map.width, map.height);
+  drawBack(ctx, map, v, dark, t); ctx.drawImage(decals, 0, 0, map.width, map.height);
   for (const r of ragdolls) drawRagdoll(r);
   for (const s of swords) drawSword(s);
   for (let p = 0; p < 2; p++) drawFighter(S.F[p], looks[p]);
-  drawFx(); if (aim && settings.aimIndicator === 'arrow') drawAimArrow(S, aim); ctx.restore(); drawCallout(map); drawMapLabel(map);
+  drawFx(); if (aim && settings.aimIndicator === 'arrow') drawAimArrow(S, aim);
+  drawFront(ctx, map, v, dark, t);
+  ctx.restore();
+  screenSpace(); drawCallout(); drawMapLabel(S, map);
 }

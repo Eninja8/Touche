@@ -21,6 +21,7 @@ import {unlockAudio, sfx} from './view/audio.js';
 import {C} from './view/theme.js';
 import {fx, view, puff, sparks, beatFx, callout, showMapName, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
 import {render} from './view/render.js';
+import {snapCamera} from './view/camera.js';
 import * as online from './net/online.js';
 
 // A fresh random seed for each match. (Choosing the seed is the only place
@@ -123,6 +124,7 @@ function dispatch(events, isOnline) {
       case 'kill': onKill(e.victim, e.hit, isOnline); if (!isOnline) slow = .8; sfx('kill', S.mode.demo); break;
       case 'roundStart':
         if (e.map !== lastMap) { lastMap = e.map; clearDecals(getMap(S)); }
+        snapCamera();
         if (!S.mode.demo) showMapName(e.name);
         resetRound(S); resetCross(S.F[localIndex(S)].face); slow = 0; setLamp(0, false); setLamp(1, false); refreshHud(); break;
       case 'score': refreshHud(); break;

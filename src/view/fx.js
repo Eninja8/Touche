@@ -6,8 +6,7 @@
 
 import {DT, GRAV, BLADE} from '../sim/constants.js';
 import {getMap} from '../sim/maps.js';
-import {groundAt, solidEnds} from '../sim/terrain.js';
-import {clamp, lerp} from '../sim/util.js';
+import {lerp} from '../sim/util.js';
 import {lungeActive} from '../sim/fighter.js';
 import {settings} from '../ui/settings.js';
 import {C} from './theme.js';
@@ -20,12 +19,14 @@ export const view = {shake: 0, callout: null, mapLabel: null};
 
 function mkLook() { return {trail: [], ghosts: [], ghostT: 0, band: null}; }
 
-// Blood that lands is painted onto this off-screen canvas (twice the map size for sharpness).
+// Blood that lands is painted onto this off-screen canvas (1.5 times the map size for sharpness).
+const DECAL = 1.5;
 export const decals = document.createElement('canvas'); decals.width = 1920; decals.height = 1080;
 const dctx = decals.getContext('2d');
 // (Also drops blood still in the air, so it doesn't land on a new map.)
-export function clearDecals(map) { decals.width = map.width * 2; decals.height = map.height * 2; for (let j = fx.length - 1; j >= 0; j--) if (fx[j].type === 'blood') fx.splice(j, 1); }
-function splat(x, y, r) { dctx.fillStyle = C.blood; dctx.globalAlpha = .85; dctx.beginPath(); dctx.ellipse(x * 2, y * 2, r * 3.2, r * 1.1, 0, 0, Math.PI * 2); dctx.fill(); dctx.globalAlpha = 1; }
+export function clearDecals(map) { decals.width = map.width * DECAL; decals.height = map.height * DECAL; for (let j = fx.length - 1; j >= 0; j--) if (fx[j].type === 'blood') fx.splice(j, 1); }
+// side: a splash on a wall is drawn upright instead of flat
+function splat(x, y, r, side) { dctx.fillStyle = C.blood; dctx.globalAlpha = .85; dctx.beginPath(); dctx.ellipse(x * DECAL, y * DECAL, r * (side ? 1.1 : 3.2) * DECAL / 2, r * (side ? 2.4 : 1.1) * DECAL / 2, 0, 0, Math.PI * 2); dctx.fill(); dctx.globalAlpha = 1; }
 
 export function sparks(x, y, n, tag, color) { for (let k = 0; k < n; k++) { const a = rnd(0, Math.PI * 2), s = rnd(150, 620); fx.push({type: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: rnd(.15, .32), max: .32, tag, color}); } }
 // A beat: a quick ring plus pale streaks, so it reads differently from a normal clash.
@@ -60,8 +61,7 @@ export function onKill(f, hit, provisional) {
   ragdolls.push({pts, cons, id: f.id, face: f.face, tag});
   const hv = {x: (P.hand.x - f.prevHand.x) / DT, y: (P.hand.y - f.prevHand.y) / DT};
   swords.push({a: {x: P.hand.x, y: P.hand.y, px: P.hand.x - (hv.x + rnd(-150, 150)) * DT, py: P.hand.y - (hv.y - 200) * DT}, b: {x: P.tip.x, y: P.tip.y, px: P.tip.x - (hv.x + rnd(-400, 400)) * DT, py: P.tip.y - (hv.y - rnd(100, 400)) * DT}, id: f.id, tag});
-  if (hit.part === 'out') { /* out of the arena: no wound */ }
-  else if (settings.blood) blood(hit.p.x, hit.p.y, hit.vx, hit.vy, 28, tag); else sparks(hit.p.x, hit.p.y, 30, tag);
+  if (settings.blood) blood(hit.p.x, hit.p.y, hit.vx, hit.vy, 28, tag); else sparks(hit.p.x, hit.p.y, 30, tag);
   view.shake = Math.max(view.shake, 13);
 }
 
@@ -78,13 +78,19 @@ export function undoKill(p) {
 export function confirmKills() { for (const list of [ragdolls, swords, fx]) for (const o of list) o.tag = undefined; }
 
 function verletPoint(p, dt) { const vx = (p.x - p.px) * .995, vy = (p.y - p.py) * .995; p.px = p.x; p.py = p.y; p.x += vx; p.y += vy + GRAV * .8 * dt * dt; }
-// Ragdoll points: floor (not over gaps), platforms, solid ends, ceiling.
+// The solid block point p (radius r) is inside, if any.
+const solidAt = (map, x, y, r) => map.solids.find(s => x > s.x - r && x < s.x + s.w + r && y > s.y - r && y < s.y + s.h + r);
+// Ragdoll points: pushed out of blocks the shortest way (landing on top has friction), platforms.
 function collidePoint(p, r, map) {
-  const {floor, platforms} = map, {left: LEFT, right: RIGHT} = map.walls;
-  if (p.y > floor - r && p.y < floor + 30 && groundAt(map, p.x)) { const vy = p.y - p.py; p.y = floor - r; p.py = p.y + vy * .3; p.px = p.x - (p.x - p.px) * .7; }
+  const {platforms} = map, s = solidAt(map, p.x, p.y, r);
+  if (s) {
+    const up = p.y - (s.y - r), down = s.y + s.h + r - p.y, left = p.x - (s.x - r), right = s.x + s.w + r - p.x, m = Math.min(up, down, left, right);
+    if (m === up) { const vy = p.y - p.py; p.y = s.y - r; p.py = p.y + vy * .3; p.px = p.x - (p.x - p.px) * .7; }
+    else if (m === down) { p.y = s.y + s.h + r; p.py = p.y; }
+    else if (m === left) { p.x = s.x - r; p.px = p.x + (p.x - p.px) * .4; }
+    else { p.x = s.x + s.w + r; p.px = p.x + (p.x - p.px) * .4; }
+  }
   for (const pl of platforms) { if (p.py <= pl.y - r + 1 && p.y > pl.y - r && p.x > pl.x && p.x < pl.x + pl.w) { const vy = p.y - p.py; p.y = pl.y - r; p.py = p.y + vy * .3; p.px = p.x - (p.x - p.px) * .7; } }
-  if (solidEnds(map)) { if (p.x < LEFT - 10) { p.x = LEFT - 10; p.px = p.x + (p.x - p.px) * .4; } if (p.x > RIGHT + 10) { p.x = RIGHT + 10; p.px = p.x + (p.x - p.px) * .4; } }
-  if (map.ceiling != null && p.y < map.ceiling + r) { p.y = map.ceiling + r; p.py = p.y; }
 }
 function satisfy(a, b, len) { const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || .001, k = (d - len) / d * .5; a.x += dx * k; a.y += dy * k; b.x -= dx * k; b.y -= dy * k; }
 
@@ -101,7 +107,7 @@ function clonePose(P) { const c = {}; for (const k in P) if (P[k] && P[k].x !== 
 
 // Called after every simulation tick that actually moved (not during freeze-frames).
 export function updateFx(S, dt) {
-  const map = getMap(S), {floor, platforms} = map, {left: LEFT, right: RIGHT} = map.walls;
+  const map = getMap(S), {platforms} = map;
   const live = S.phase !== 'countdown';
   for (let p = 0; p < 2; p++) {
     const f = S.F[p], L = looks[p];
@@ -125,13 +131,14 @@ export function updateFx(S, dt) {
     if (p.type === 'spark') { p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
     else if (p.type === 'blood') {
       p.vy += 1600 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-      let hit = p.y >= floor && p.y < floor + 30 && groundAt(map, p.x); if (hit) p.y = floor + 1;
+      // a drop that enters a block sticks to the face it came through (a top, or a wall's side)
+      const s = solidAt(map, p.x, p.y, 0);
+      let hit = !!s, side = false;
+      if (s) { const px = p.x - p.vx * dt, py = p.y - p.vy * dt; if (py <= s.y) p.y = s.y + 1; else if (px <= s.x) { p.x = s.x + 1; side = true; } else if (px >= s.x + s.w) { p.x = s.x + s.w - 1; side = true; } else p.y = s.y + s.h - 1; }
       for (const pl of platforms) if (!hit && p.vy > 0 && p.y >= pl.y && p.y < pl.y + 10 && p.x > pl.x && p.x < pl.x + pl.w) { hit = true; p.y = pl.y + 1; }
-      // side walls are invisible: drops bounce off them and fall to the floor instead of sticking in mid-air
-      if (solidEnds(map) && (p.x < LEFT || p.x > RIGHT)) { p.x = clamp(p.x, LEFT, RIGHT); p.vx *= -.15; }
       // provisional blood waits on the floor (not painted) until the touch is confirmed
       if (hit && p.tag) { p.vx = p.vy = 0; p.life = Math.max(p.life, .5); }
-      else if (hit) { splat(p.x, p.y, p.size); p.life = 0; }
+      else if (hit) { splat(p.x, p.y, p.size, side); p.life = 0; }
     }
     else if (p.type === 'puff') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .92; p.vy *= .92; }
     else if (p.type === 'text') { p.y += p.vy * dt; }
@@ -143,5 +150,5 @@ export function updateFx(S, dt) {
 export function updateRealtime(rdt) {
   view.shake = Math.max(0, view.shake - rdt * 40);
   if (view.callout) { view.callout.t += rdt; if (view.callout.t > view.callout.dur) view.callout = null; }
-  if (view.mapLabel) { view.mapLabel.t += rdt; if (view.mapLabel.t > 1.7) view.mapLabel = null; }
+  if (view.mapLabel) { view.mapLabel.t += rdt; if (view.mapLabel.t > 2.4) view.mapLabel = null; }
 }

@@ -21,6 +21,15 @@
 
 ## Session log
 
+### 2026-10-14 — Phase C2: hazards, bigger maps, camera, ropes
+- Ring-out removed. Hazards are spiked pits and spike strips (touch = point for the opponent; both = coup double). Hazards Off removes spikes and floors over pits.
+- Maps rebuilt from solid blocks (every side wall-jumpable), ~1.7x bigger: Great Hall (new, replaces Hall/Open Hall), Rooftops, Forge, Frozen Lake (ice grip .08), Dojo. Map files in src/sim/maps/, painters in src/view/themes/ with parallax layers, lighting and ambient particles.
+- Ropes, chains and ladders (src/sim/rope.js): jump in to grab, up/down climb, jump+direction to leap off, blade works while hanging.
+- Follow camera (src/view/camera.js), render-only. Map name big at round start, small bottom-left during the round. Lobby defaults to Random each round.
+- CPU: ai-plan.js (tries moves in a copy of the physics), ai-nav.js (per-map route graph), ai-chase.js (chase, escape, bait across pits, spike guard, pin opponents near pits). Hard CPU reaches every surface of every map (test).
+- PROTOCOL 8. npm test all passing.
+- Not yet checked by eye: rope grab screenshots from the last run.
+
 ### 2026-10-14: Phase 1 (setup, restructure, deploy)
 - Checked tools: Node.js v20.11.1 (past end-of-life; upgraded in the next session), npm 10.2.4, git 2.44.
 - Created the git repo with `.gitignore`/`.gitattributes`, committed the original single-file game as-is, pushed to github.com/Eninja8/Touche. Switched this repo to Git Credential Manager for sign-in.

@@ -1,7 +1,7 @@
 // Shared state for online play (used by online.js and match.js): the connection
 // and match status, the hooks into the rest of the game, and small helpers.
 
-export const PROTOCOL = 7;   // bump when online play or gameplay changes, so mismatched versions refuse to play
+export const PROTOCOL = 8;   // bump when online play or gameplay changes, so mismatched versions refuse to play
 export const $ = id => document.getElementById(id);
 
 // Set by initOnline: {app, dispatch, hud}
