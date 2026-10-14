@@ -4,7 +4,8 @@
 // Fencing decisions are here; getting around the arena (chasing, escaping, baiting,
 // staying off spikes) is in ai-chase.js, built on ai-nav.js and ai-plan.js.
 
-import {ANG_MIN, ANG_MAX, BEAT_SPEED} from './constants.js';
+import {ANG_MIN, ANG_MAX, BEAT_SPEED, BEAT_MEET, BLADE_TURN} from './constants.js';
+import {foeOf} from './foes.js';
 import {getMap} from './maps.js';
 import {clamp} from './util.js';
 import {random, rand} from './rng.js';
@@ -13,7 +14,7 @@ import {runScript, chase, followEdge, escape, bait, guard} from './ai-chase.js';
 import {powerDecision, powerTick} from './ai-power.js';
 
 // react: seconds between decisions; block: chance to defend a thrust;
-// aggro: how often it attacks; ang: blade turn speed; err: aim wobble;
+// aggro: how often it attacks; ang: blade turn speed (share of BLADE_TURN); err: aim wobble;
 // slide: chance to read an incoming slide; slideReact: how fast it notices (s);
 // beat: chance to try a beat when the opponent's point is close and still;
 // against wild swinging: wildBack = chance to back out of reach, wildMeet = chance to
@@ -25,9 +26,9 @@ import {powerDecision, powerTick} from './ai-power.js';
 // Power-ups (ai-power.js): grab = chance to go for a pickup; throw = chance to throw the knife
 // when lined up; lead = how well it leads a moving target; dodge = chance to dodge or block a knife.
 export const DIFF = {
-  easy: {react: .24, block: .3, aggro: .4, ang: 4.2, err: .35, slide: .3, slideReact: .2, beat: 0, wildBack: .1, wildMeet: .05, punish: .2, careful: .6, pin: .2, bait: 0, escape: .15, grab: .35, throw: .25, lead: 0, dodge: .2},
-  normal: {react: .15, block: .55, aggro: .6, ang: 5.2, err: .2, slide: .75, slideReact: .08, beat: .06, wildBack: .3, wildMeet: .15, punish: .5, careful: .92, pin: .5, bait: .3, escape: .35, grab: .65, throw: .4, lead: .6, dodge: .5},
-  hard: {react: .085, block: .8, aggro: .75, ang: 6.2, err: .1, slide: .92, slideReact: .05, beat: .12, wildBack: .3, wildMeet: .15, punish: .6, careful: 1, pin: .8, bait: .45, escape: .6, grab: .85, throw: .55, lead: 1, dodge: .75},
+  easy: {react: .24, block: .3, aggro: .4, ang: .44, err: .35, slide: .3, slideReact: .2, beat: 0, wildBack: .1, wildMeet: .05, punish: .2, careful: .6, pin: .2, bait: 0, escape: .15, grab: .35, throw: .25, lead: 0, dodge: .2},
+  normal: {react: .15, block: .55, aggro: .6, ang: .55, err: .2, slide: .75, slideReact: .08, beat: .06, wildBack: .3, wildMeet: .15, punish: .5, careful: .92, pin: .5, bait: .3, escape: .35, grab: .65, throw: .4, lead: .6, dodge: .5},
+  hard: {react: .085, block: .8, aggro: .75, ang: .65, err: .1, slide: .92, slideReact: .05, beat: .12, wildBack: .3, wildMeet: .15, punish: .6, careful: 1, pin: .8, bait: .45, escape: .6, grab: .85, throw: .55, lead: 1, dodge: .75},
 };
 
 // slideSeen: the opponent's current slide was already noticed; slideIn: seconds until it reacts
@@ -44,8 +45,8 @@ function aimAt(me, pt) { const sh = me.P.sh; return clamp(Math.atan2(-(pt.y - sh
 
 // Called every tick for a CPU-controlled player p: turn its plan into held keys.
 export function aiStep(S, p, dt) {
-  const me = S.F[p], op = S.F[1 - p], i = S.inp[p], A = S.AI[p], d = DIFF[A.diff], map = getMap(S);
-  me.angSpd = d.ang;
+  const me = S.F[p], op = foeOf(S, me), i = S.inp[p], A = S.AI[p], d = DIFF[A.diff], map = getMap(S);
+  me.angSpd = d.ang * BLADE_TURN;
   if (!me.alive) { i.left = i.right = i.raise = i.lower = i.up = i.down = false; A.script = null; return; }
   A.t -= dt; A.holdUp -= dt; A.badT -= dt;
   // wild: recent seconds of the opponent swinging hard (fades over about half a second)
@@ -76,7 +77,7 @@ function watchSlide(S, me, op, i, A, d, dt) {
   const gap = Math.abs(op.P.tip.x - me.x) - 14, tc = Math.max(0, gap) / Math.max(1, Math.abs(op.vx));
   if (A.slideIn >= 0 && (A.slideIn -= dt) <= 0) {
     A.slideIn = -1;
-    const turnTime = Math.abs(aimAt(me, op.P.tip) - me.angle) / d.ang, r = random(S);
+    const turnTime = Math.abs(aimAt(me, op.P.tip) - me.angle) / me.angSpd, r = random(S);
     A.plan = turnTime < tc - .03 && r < .6 ? 'meet' : tc > .14 && r < .85 ? 'jump' : 'back';
     if (A.plan === 'back') { A.move = toward; i.buf.dash = .1; } // `toward` points from the slider to me: away from it
   }
@@ -138,7 +139,7 @@ function think(S, me, op, i, A, d, map, scripted) {
   // (Then opOpen above makes a thrust likely while their blade is knocked aside.)
   // When pinning, a swing into their blade is also good: the clash knocks them back.
   const reach = Math.hypot(op.P.tip.x - me.P.sh.x, op.P.tip.y - me.P.sh.y);
-  if (reach < 96 && op.swingSpeed < 200 && !op.lunge && op.beatT <= 0 && random(S) < d.beat + (pinning ? .25 : 0)) {
+  if (reach < 96 && op.swingSpeed < BEAT_MEET && !op.lunge && op.beatT <= 0 && random(S) < d.beat + (pinning ? .25 : 0)) {
     const at = aimAt(me, op.P.tip); A.targetAng = at + (me.angle > at ? -.7 : .7); A.move = pinning ? toward : 0; A.t = .25;
     return;
   }

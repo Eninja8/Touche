@@ -13,10 +13,11 @@ import {getMap} from './sim/maps.js';
 import {createGame, newMatch, step} from './sim/game.js';
 import {drain} from './sim/events.js';
 import {settings} from './ui/settings.js';
-import {initInput, sampleCommands, clearKeys, mousePlayer} from './ui/input.js';
+import {initInput, sampleCommands, clearKeys, clearPresses, mousePlayer} from './ui/input.js';
+import {initNetPanel, updateNetPanel} from './ui/netpanel.js';
 import {initMenus, hud, setLamp, showGameOver, setPauseHint, setPauseNote, pauseEl, overEl, setEl} from './ui/menus.js';
 import {showScreen, hideScreens} from './ui/screens.js';
-import {cross, resetCross, isLocked, requestLock, releaseLock, onLockChange} from './ui/mouse.js';
+import {cross, screen, resetCross, placeFreeCursor, isLocked, requestLock, releaseLock, onLockChange} from './ui/mouse.js';
 import {unlockAudio, sfx} from './view/audio.js';
 import {C} from './view/theme.js';
 import {fx, view, puff, sparks, beatFx, pickupFx, callout, showMapName, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
@@ -127,7 +128,7 @@ function dispatch(events, isOnline) {
         if (e.map !== lastMap) { lastMap = e.map; clearDecals(getMap(S)); }
         snapCamera();
         if (!S.mode.demo) showMapName(e.name);
-        resetRound(S); resetCross(S.F[localIndex(S)].face); slow = 0; setLamp(0, false); setLamp(1, false); refreshHud(); break;
+        resetRound(S); resetCross(S.F[localIndex(S)].face, localIndex(S)); clearPresses(); slow = 0; setLamp(0, false); setLamp(1, false); refreshHud(); break;
       case 'score': refreshHud(); break;
       case 'matchOver': releaseLock(); showGameOver(S, e.winner, S.mode.online ? online.localPlayer() : -1); break;
       case 'matchStart': case 'clearDecals': clearDecals(getMap(S)); lastMap = null; break;
@@ -156,13 +157,16 @@ function frame(now) {
   }
   checkLock(now);
   const mp = mousePlayer(app.S);
-  render(app.S, mp >= 0 && isLocked() ? {p: mp, x: cross.x, y: cross.y} : null);
+  render(app.S, mp >= 0 && isLocked() ? {p: mp, x: cross.x, y: cross.y, style: settings.aimStyle, sx: screen.x, sy: screen.y} : null);
+  placeFreeCursor(app.S);
+  updateNetPanel(now);
   requestAnimationFrame(frame);
 }
 
 const ui = initMenus(app);
 initInput(app, ui);
 online.initOnline({app, dispatch, hud: refreshHud});
+initNetPanel(online.isActive);
 dispatch(drain());
 app.showMenu();
 if (document.fonts && document.fonts.load) { document.fonts.load('900 92px "Big Shoulders Display"').catch(() => {}); }

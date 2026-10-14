@@ -1,7 +1,7 @@
 // Rollback netcode for one round of online play.
 //
 // Both computers run the full game. Each tick ("frame"), they swap only their
-// inputs. Your own input is scheduled INPUT_DELAY frames ahead, which gives it
+// inputs. Your own input is scheduled a few frames ahead (the input delay), which gives it
 // time to reach the opponent. When the opponent's input for a frame hasn't
 // arrived yet, we guess it (see codec.predict) and keep going. When the real
 // input arrives and the guess was wrong, we rewind to that frame (restore a
@@ -16,7 +16,11 @@ import {drain} from '../sim/events.js';
 import {DT} from '../sim/constants.js';
 import {EMPTY, decode, same, predict} from './codec.js';
 
-export const INPUT_DELAY = 2;  // ticks (17 ms)
+// INPUT_DELAY is the smallest delay (ticks; 2 = 17 ms) and what both computers assume for the
+// first frames of a round. Each computer may use a longer delay of its own for a round
+// (`delay` below; ?delay=N in the page address): its inputs are simply scheduled later, and
+// the frame numbers in the packets keep both games in step either way.
+export const INPUT_DELAY = 2;
 export const MAX_PREDICT = 12; // never guess more than this many ticks (100 ms) past the opponent's real inputs
 export const SUM_EVERY = 60;   // compare game "fingerprints" with the opponent twice a second
 
@@ -36,14 +40,16 @@ export function hashState(S) {
 
 export class RollbackSession {
   // S: the game state (already at the start of the round). me: 0 = Red (host), 1 = Green.
-  constructor(S, me, round) {
-    this.S = S; this.me = me; this.round = round;
+  // delay: our own input delay for this round (INPUT_DELAY or more).
+  constructor(S, me, round, delay = INPUT_DELAY) {
+    this.S = S; this.me = me; this.round = round; this.delay = Math.max(INPUT_DELAY, delay | 0);
     this.frame = 0;          // the next frame to simulate
     this.local = [];         // our inputs, by frame (encoded)
     this.remote = [];        // opponent's real inputs, by frame
     this.used = [];          // the opponent input we actually simulated each frame with (real or guessed)
     this.states = [];        // saved game state at the start of each recent frame
-    for (let f = 0; f < INPUT_DELAY; f++) { this.local[f] = EMPTY; this.remote[f] = EMPTY; }
+    for (let f = 0; f < this.delay; f++) this.local[f] = EMPTY;
+    for (let f = 0; f < INPUT_DELAY; f++) this.remote[f] = EMPTY;
     this.remoteMax = INPUT_DELAY - 1;    // we have ALL opponent inputs up to this frame
     this.remoteLatest = INPUT_DELAY - 1; // highest opponent frame received (there may be gaps before it)
     this.ackedByRemote = INPUT_DELAY - 1; // the opponent has all our inputs up to this frame
@@ -51,16 +57,16 @@ export class RollbackSession {
     this.rollbackFrom = Infinity;
     this.scanned = 0;        // confirmed frames already checked for a KO / fingerprinted
     this.mySums = new Map(); this.peerSums = new Map(); this.newSums = []; this.desyncAt = null;
-    this.stats = {rollbacks: 0, maxRollback: 0};
+    this.stats = {rollbacks: 0, maxRollback: 0, lastRollback: 0}; // lastRollback: frames re-simulated by the latest one
   }
 
   // May we simulate another frame, or are we too far ahead of the opponent's real inputs?
   canAdvance() { return this.frame - this.remoteMax <= MAX_PREDICT; }
 
-  // Simulate one new frame with our input for (frame + INPUT_DELAY).
+  // Simulate one new frame with our input for (frame + delay).
   // Returns {events, moved} for this fresh frame.
   advance(localInput) {
-    this.local[this.frame + INPUT_DELAY] = localInput;
+    this.local[this.frame + this.delay] = localInput;
     const out = this.simulate(this.frame);
     this.frame++;
     this.prune();
@@ -102,7 +108,7 @@ export class RollbackSession {
     restore(this.S, this.states[f0]);
     const events = [];
     for (let f = f0; f < this.frame; f++) events.push(...this.simulate(f).events);
-    this.stats.rollbacks++; this.stats.maxRollback = Math.max(this.stats.maxRollback, this.frame - f0);
+    this.stats.rollbacks++; this.stats.lastRollback = this.frame - f0; this.stats.maxRollback = Math.max(this.stats.maxRollback, this.frame - f0);
     return events;
   }
 
@@ -142,7 +148,7 @@ export class RollbackSession {
   // Everything the opponent might still be missing: our unacknowledged inputs,
   // what we have received from them (ack), and our frame number (for time sync).
   makePacket() {
-    const last = this.frame - 1 + INPUT_DELAY, from = Math.max(this.ackedByRemote + 1, last - 119);
+    const last = this.frame - 1 + this.delay, from = Math.max(this.ackedByRemote + 1, last - 119);
     const inputs = []; for (let f = from; f <= last; f++) inputs.push(this.local[f]);
     return {t: 'in', r: this.round, s: from, i: inputs, a: this.remoteMax, f: this.frame};
   }

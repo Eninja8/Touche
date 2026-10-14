@@ -38,6 +38,7 @@ function finishRebind(code) {
   if (rebinding.fs) { finishFullscreenRebind(code); return; }
   const {p, a} = rebinding; rebinding = null; let msg = '';
   if (code === 'KeyM') msg = 'M is reserved for mute.';
+  else if (code === 'KeyN') msg = 'N is reserved for network stats.';
   else if (code !== 'Escape') {
     const old = settings.binds[p][a];
     // if the key was already used elsewhere, swap the two
@@ -52,6 +53,7 @@ function finishFullscreenRebind(code) {
   rebinding = null; let msg = '';
   const used = settings.binds.some(b => Object.values(b).includes(code));
   if (code === 'KeyM') msg = 'M is reserved for mute.';
+  else if (code === 'KeyN') msg = 'N is reserved for network stats.';
   else if (used) msg = 'Already in use.';
   else if (code !== 'Escape') { settings.fullscreenKey = code; saveSettings(); }
   renderBinds(); $('bindNote').textContent = msg; $('key-fs').focus();
@@ -71,7 +73,7 @@ function syncIcons() {
 function buildOptions() {
   const opt = (box, label, values, key) => { const o = optionRow({label, values, get: () => settings[key], set: v => { settings[key] = v; saveSettings(); if (key === 'muted') { applyVolume(); syncIcons(); } }}); $(box).appendChild(o.row); optRows.push(o); };
   opt('optsControls', 'Aim with mouse', ON_OFF, 'mouseAim');
-  opt('optsControls', 'Aim indicator', [['arrow', 'Arrow'], ['off', 'Off']], 'aimIndicator');
+  opt('optsControls', 'Aim style', [['free', 'Free cursor'], ['arrow', 'Arrow'], ['off', 'Off']], 'aimStyle');
   opt('optsSound', 'Mute', ON_OFF, 'muted');
   opt('optsDisplay', 'Screen shake', ON_OFF, 'shake');
   opt('optsDisplay', 'Blood', ON_OFF, 'blood');

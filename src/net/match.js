@@ -6,7 +6,8 @@ import {DT} from '../sim/constants.js';
 import {newMatch, step, koAnnouncements} from '../sim/game.js';
 import {drain} from '../sim/events.js';
 import {DEFAULT_MAP} from '../sim/maps.js';
-import {RollbackSession, restore} from './rollback.js';
+import {RollbackSession, restore, INPUT_DELAY} from './rollback.js';
+import {ns, onRollback, onStall} from './netstats.js';
 import {encode, decode, EMPTY} from './codec.js';
 import {settings} from '../ui/settings.js';
 import {sampleOnline, clearKeys} from '../ui/input.js';
@@ -18,6 +19,12 @@ import {net, hooks, $, sendCtl, setBanner, roundKey} from './state.js';
 
 const STALL_NOTE_MS = 500;
 const IDLE = [decode(EMPTY), decode(EMPTY)];
+// Input delay in ticks: 2 normally; add ?delay=3 (up to 8) to the page address to try a longer one.
+// Each player picks their own; the two don't have to match.
+const DELAY = Math.min(8, Math.max(INPUT_DELAY, +new URLSearchParams(location.search).get('delay') || INPUT_DELAY));
+
+// Send an input packet, numbered and timed so the opponent can measure loss and jitter (netstats.js).
+function sendInputs(s) { const p = s.makePacket(); p.q = ++net.seq; p.ts = Math.round(performance.now() * 10) / 10; net.link.send(p); return p; }
 
 // Host: pick the seed and send the match settings; both computers then set up the same match.
 export function hostStartsMatch() {
@@ -47,7 +54,7 @@ export function tryStartRound() {
   const S = hooks.app.S;
   if (net.phase !== 'wait' || net.peerReady < roundKey(S)) return;
   const key = roundKey(S);
-  net.session = new RollbackSession(S, net.me, key);
+  net.session = new RollbackSession(S, net.me, key, DELAY); ns.delay = DELAY;
   for (const p of net.early) if (p.r === key) net.session.receivePacket(p);
   net.early = []; net.kills = {}; net.acc = 0; net.stallSince = null; net.lastPacket = null;
   net.phase = 'play';
@@ -61,7 +68,7 @@ export function tryStartRound() {
 // and play the rest of the round locally in slow motion.
 function enterKO(koFrame) {
   const S = hooks.app.S, s = net.session, st = s.stateAt(koFrame);
-  net.lastPacket = s.makePacket();
+  net.lastPacket = sendInputs(s);
   if (st !== S) restore(S, st);
   net.session = null; net.phase = 'ko'; drain();
   reconcileKills([]); confirmKills();
@@ -111,7 +118,7 @@ export function matchFrame(rdt, now) {
 
 function tickPlay(now) {
   const S = hooks.app.S, s = net.session;
-  const re = s.applyRollback(); if (re) reconcileKills(re);
+  const re = s.applyRollback(); if (re) { reconcileKills(re); onRollback(s.stats.lastRollback); }
   const ko = s.scanConfirmed();
   for (const x of s.newSums.splice(0)) net.link.send({t: 'sum', r: s.round, f: x.f, h: x.h});
   if (s.desyncAt !== null && !net.desync) {
@@ -121,9 +128,9 @@ function tickPlay(now) {
   }
   if (ko !== null) { enterKO(ko); return; }
   if (!s.canAdvance()) {
-    net.stallSince ??= now;
+    net.stallSince ??= now; onStall();
     if (now - net.stallSince > STALL_NOTE_MS && !net.desync) setBanner('Waiting for opponent…');
-    net.link.send(s.makePacket());
+    sendInputs(s);
     return;
   }
   if (net.stallSince !== null) { net.stallSince = null; if (!net.desync) setBanner(null); }
@@ -131,7 +138,8 @@ function tickPlay(now) {
   for (const e of events) if (e.type === 'kill') net.kills[e.victim.id] = e;
   hooks.dispatch(events, true);
   if (moved) updateFx(S, DT);
-  net.link.send(s.makePacket());
+  sendInputs(s);
+  ns.advantage = s.frameAdvantage(net.rtt);
 }
 
 // KO replay and game-over: plain local ticks with no inputs (identical on both computers).

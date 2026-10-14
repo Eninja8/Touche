@@ -36,14 +36,14 @@ function script(p, f) {
 
 const MATCH = {demo: false, vsCPU: false, online: true, target: 99, seed: 4242};
 
-function runNetwork({ticks, delay, jitter, loss, hiccup, seed, match = MATCH}) {
+function runNetwork({ticks, delay, jitter, loss, hiccup, seed, match = MATCH, delays = [INPUT_DELAY, INPUT_DELAY]}) {
   const rand = rng(seed);
   const peers = [0, 1].map(me => {
     // Each player's game has a different history before the match (like the menu's demo bout
     // running for different lengths on each computer). newMatch must wipe all of it.
     const S = createGame(me + 7); newMatch(S, {demo: true, seed: me + 3}); for (let k = 0; k < 500 + 700 * me; k++) step(S, [null, null]);
     newMatch(S, match); drain();
-    return {me, S, session: new RollbackSession(S, me, S.round), inbox: []};
+    return {me, S, session: new RollbackSession(S, me, S.round, delays[me]), inbox: []};
   });
   const final = ticks;
   let lossOn = true;
@@ -74,10 +74,10 @@ function runNetwork({ticks, delay, jitter, loss, hiccup, seed, match = MATCH}) {
 }
 
 // The straight, no-rollback run with the same inputs.
-function reference(ticks, match = MATCH) {
+function reference(ticks, match = MATCH, delays = [INPUT_DELAY, INPUT_DELAY]) {
   const S = createGame(1); newMatch(S, match); drain();
   for (let f = 0; f < ticks; f++) {
-    const inp = p => decode(f < INPUT_DELAY ? EMPTY : script(p, f - INPUT_DELAY));
+    const inp = p => decode(f < delays[p] ? EMPTY : script(p, f - delays[p]));
     step(S, [inp(0), inp(1)]); drain();
   }
   return S;
@@ -88,9 +88,10 @@ for (const net of [
   {name: 'bad connection (100 ms, heavy jitter, 10% loss, slow frames)', ticks: 3000, delay: 12, jitter: 10, loss: .1, hiccup: .05, seed: 2},
   {name: 'lag spike territory (200 ms: players must stall and wait)', ticks: 1500, delay: 24, jitter: 6, loss: .02, hiccup: 0, seed: 3},
   {name: 'power-ups on, random maps (100 ms, 5% loss)', ticks: 6000, delay: 12, jitter: 8, loss: .05, hiccup: .02, seed: 5, match: {...MATCH, map: 'round', hazards: true, powerups: true}},
+  {name: 'different input delays (Red 2 ticks, Green 4; 100 ms, 5% loss)', ticks: 3000, delay: 12, jitter: 8, loss: .05, hiccup: .02, seed: 6, delays: [2, 4]},
   {name: 'random map each round, hazards on (100 ms, 5% loss)', ticks: 6000, delay: 12, jitter: 8, loss: .05, hiccup: .02, seed: 4, match: {...MATCH, map: 'round', hazards: true}},
 ]) {
-  const [a, b] = runNetwork(net), ref = reference(net.ticks, net.match);
+  const [a, b] = runNetwork(net), ref = reference(net.ticks, net.match, net.delays);
   const ha = hashState(a.S), hb = hashState(b.S), hr = hashState(ref);
   check(ha === hb && ha === hr, `${net.name}: both players and the straight run agree after ${net.ticks} ticks (score ${ref.scores.join('-')}, round ${ref.round} on ${ref.map})`);
   const st = a.session.stats, st2 = b.session.stats;

@@ -13,7 +13,7 @@ import {createGame, newMatch, step, snapshot} from '../src/sim/game.js';
 import {drain} from '../src/sim/events.js';
 import {bodyParts} from '../src/sim/fighter.js';
 import {distPtSeg} from '../src/sim/util.js';
-import {TIP_LETHAL, LETHAL, BLADE} from '../src/sim/constants.js';
+import {TIP_LETHAL, LETHAL, BLADE, BLADE_TURN, KEY_TURN, DT} from '../src/sim/constants.js';
 import {isBeat} from '../src/sim/combat.js';
 
 const simDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/sim');
@@ -74,11 +74,11 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
   run({x: -100 * face0, y: 0}, 1); // crosshair jumps behind: fencer turns this tick
   const turn = Math.abs(Math.atan2(Math.sin(dir() - before), Math.cos(dir() - before)));
   check(f.face === -face0, 'mouse player turns to face the crosshair');
-  check(turn < 0.1, `blade keeps its world direction when turning (moved ${turn.toFixed(3)} rad in one tick)`);
+  check(turn < BLADE_TURN * DT + .01, `blade keeps its world direction when turning (moved ${turn.toFixed(3)} rad in one tick, one tick of turning is ${(BLADE_TURN * DT).toFixed(3)})`);
   let maxSpeed = 0, maxTipY = 1e9; const startY = f.P.sh.y;
   for (let k = 0; k < 60; k++) { run({x: -100 * face0, y: 0}, 1); maxSpeed = Math.max(maxSpeed, f.tipSpeed); maxTipY = Math.min(maxTipY, f.P.tip.y); }
   check(maxTipY < startY - 60, 'the blade swings over the top to the new side');
-  check(maxSpeed >= 600, `that swing is fast enough to be lethal (${Math.round(maxSpeed)} px/s)`);
+  check(maxSpeed >= LETHAL, `that swing is fast enough to be lethal (${Math.round(maxSpeed)} px/s, ${LETHAL} needed)`);
 }
 
 // 5. the point and solid blades. Red stands still, blade level; Green keeps its blade pointed
@@ -104,7 +104,7 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
   while (G.F[1].x - G.F[0].x > 60) run(keys(), low({left: true}), 1); // Green steps in under it
   run(keys(), low(), 20);
   const x0 = G.F[1].x;
-  run(keys({lower: true}), low(), 25); // down to level, through Green
+  run(keys({lower: true}), low(), Math.round(25 * 5.2 / KEY_TURN)); // down to level, through Green (the same turn as 25 ticks at the old 5.2 rad/s)
   check(!killed && inside === 0, `a slow swing (${Math.round(G.F[0].angSpd * 100)} px/s at the point) neither kills nor passes through (Green shoved ${Math.round(Math.abs(G.F[1].x - x0))} px)`);
   // Green backs off, then runs onto the point
   run(keys(), low({right: true}), 30); run(keys(), low(), 30);
@@ -163,7 +163,8 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
   }
   // swinging back into a swing is a clash; a still or same-way blade gets beaten (fake fencers, both facing each other)
   const fencer = (face, rate) => ({face, angle: 0, deflect: 0, swingRate: rate, swingSpeed: Math.abs(rate) * 100, beatCD: 0, blade: BLADE});
-  check(!isBeat(fencer(1, 9.5), fencer(-1, -3)) && isBeat(fencer(1, 9.5), fencer(-1, 3)) && isBeat(fencer(1, 9.5), fencer(-1, 0)), 'meeting a swing with your own blade (300 px/s the other way) is a clash, not a beat');
+  const full = BLADE_TURN, back = BLADE_TURN * .32; // a full-speed swing, met by one at about a third of that speed
+  check(!isBeat(fencer(1, full), fencer(-1, -back)) && isBeat(fencer(1, full), fencer(-1, back)) && isBeat(fencer(1, full), fencer(-1, 0)), `meeting a swing with your own blade (${Math.round(back * 100)} px/s the other way) is a clash, not a beat`);
 }
 
 // 7. the swing that lands a beat can't kill: a fast mouse swing beats a blade, then carries on through the body
@@ -200,6 +201,21 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
     }
   }
   check(wins / rounds < .5, `swing-spamming forward wins ${Math.round(100 * wins / rounds)}% of rounds against the Hard CPU (was 64% before the beat fixes)`);
+}
+
+// 9. presses don't carry into a new round: mashing thrust, jump, dash and throw through the
+// countdown (and still holding the keys after "ALLEZ !") does nothing until pressed again
+{
+  const G = createGame(1); newMatch(G, {demo: false, vsCPU: false, seed: 21, powerups: true});
+  const held = {left: false, right: false, up: true, down: false, raise: false, lower: false};
+  const mash = {held, presses: ['attack', 'up', 'dash', 'throw'], aim: null}, hold = {held, presses: [], aim: null};
+  const seen = [];
+  while (G.phase === 'countdown') { step(G, [mash, mash]); drain(); }
+  for (let k = 0; k < 60; k++) { step(G, [hold, hold]); for (const e of drain()) if (e.type === 'sfx') seen.push(e.name); }
+  const acted = G.F.some(f => f.lunge || f.lungeCD > 0 || !f.onGround) || seen.some(n => ['swish', 'jump', 'dash', 'throw'].includes(n));
+  check(!acted, `presses made during the countdown don't fire after "ALLEZ !" (${seen.join(', ') || 'no action sounds'})`);
+  step(G, [{held, presses: ['attack'], aim: null}, hold]); drain();
+  check(!!G.F[0].lunge, 'a fresh press after the start works straight away');
 }
 
 console.log(failed ? '\nSome checks FAILED.' : '\nAll checks passed.');

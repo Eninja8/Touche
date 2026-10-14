@@ -57,28 +57,46 @@ const play = (powerups = true) => { const G = createGame(1); newMatch(G, {seed: 
 const place = (f, x, y) => { f.x = x; f.y = y; f.vx = f.vy = 0; f.P = null; f.prevHand = null; finishPose(f); };
 const run = (G, n, c0 = () => cmd(), c1 = () => cmd()) => { const ev = []; for (let k = 0; k < n; k++) { step(G, [c0(k), c1(k)]); ev.push(...drain()); } return ev; };
 
-// 3. a pickup is waiting when the round starts, on a spot; walking into it takes it, and the
-//    next one comes 7 s later
+// 3. a fair wave is waiting when the round starts: one pickup per fencer, the same kind, on a
+//    mirrored pair of spots, each exactly as far from one fencer as the other is from the other.
+//    Each fencer can take only one per wave; the next wave comes 7 s after the first pickup.
 {
-  const G = play();
-  const it = G.item;
-  check(it && getMap(G).items.some(s => s.x === it.x), `a power-up is waiting when the round starts, on one of the map's spots (${it ? it.kind + ' at x ' + it.x : 'none'})`);
-  if (it) {
-    place(G.F[0], it.x - 40, it.y + 34);
-    const ev2 = run(G, 40, () => cmd({right: true}));
-    check(G.F[0].power === it.kind && !G.item && ev2.some(e => e.type === 'pickup'), `walking into it gives that power (Red has ${G.F[0].power})`);
-    run(G, 7 * 120 - 60); const none = !G.item; run(G, 60); // (it was taken partway through the 40-tick walk)
-    check(none && G.item, 'the next one appears 7 s after it was taken');
+  const G = play(), [i0, i1] = G.items, m = getMap(G);
+  const d = (f, it) => Math.hypot(f.x - it.x, f.y - it.y);
+  const ok = G.items.length === 2 && i0.kind === i1.kind && i0.x === m.width - i1.x && i0.y === i1.y && m.items.some(s => s.x === i0.x);
+  const near0 = Math.min(d(G.F[0], i0), d(G.F[0], i1)), near1 = Math.min(d(G.F[1], i0), d(G.F[1], i1));
+  check(ok && Math.abs(near0 - near1) < 1e-9, `a mirrored pair of the same power-up is waiting when the round starts (${ok ? i0.kind + ' at x ' + i0.x + ' and ' + i1.x : 'no'}; Red's is ${Math.round(near0)} px away, Green's ${Math.round(near1)} px)`);
+  if (ok) {
+    let tookAt = -1;
+    const walkInto = it => { place(G.F[0], it.x - 40, it.y + 34); const ev = []; for (let k = 0; k < 40; k++) { step(G, [cmd({right: true}), cmd()]); for (const e of drain()) { ev.push(e); if (e.type === 'pickup' && tookAt < 0) tookAt = G.tick; } } return ev; };
+    const ev = walkInto(i0);
+    check(G.F[0].power === i0.kind && G.items.length === 1 && ev.some(e => e.type === 'pickup'), `walking into one gives that power (Red has ${G.F[0].power})`);
+    G.F[0].power = null; const ev2 = walkInto(i1);
+    check(!G.F[0].power && G.items.length === 1 && !ev2.some(e => e.type === 'pickup'), 'the same fencer can\'t take the other one of the pair');
+    place(G.F[0], 300, 790); place(G.F[1], i1.x - 40, i1.y + 34); run(G, 40, () => cmd(), () => cmd({right: true}));
+    check(G.F[1].power === i1.kind && !G.items.length, `the other fencer can (Green has ${G.F[1].power})`);
+    run(G, tookAt + 7 * 120 - 2 - G.tick); const none = !G.items.length; run(G, 4);
+    check(none && G.items.length === 2, 'the next wave appears 7 s after the first pickup of the last one');
   }
+}
+// 3b. fair in practice: across CPU-vs-CPU bouts on every map, each side gets about half the pickups
+{
+  const got = [0, 0];
+  for (const map of MAP_KEYS) for (const seed of [1, 2, 3]) {
+    const G = createGame(1); newMatch(G, {demo: true, seed, map, powerups: true});
+    for (let k = 0; k < 8000; k++) { step(G, [null, null]); for (const e of drain()) if (e.type === 'pickup') got[e.p]++; }
+  }
+  const share = got[0] / (got[0] + got[1]);
+  check(share > .4 && share < .6, `each side gets about half the pickups (Red ${got[0]}, Green ${got[1]})`);
 }
 {
   const G = play(false); run(G, 120 * 20);
-  check(!G.item, 'with Power-ups off, nothing appears (20 s)');
+  check(!G.items.length, 'with Power-ups off, nothing appears (20 s)');
 }
 
 // 4. what each power does
 {
-  const top = power => { const G = play(); G.item = null; if (power) givePower(G.F[0], power); place(G.F[0], 600, 790); place(G.F[1], 1500, 790); let v = 0; run(G, 90, () => cmd({right: true})); v = G.F[0].vx; return v; };
+  const top = power => { const G = play(); G.items = []; if (power) givePower(G.F[0], power); place(G.F[0], 600, 790); place(G.F[1], 1500, 790); let v = 0; run(G, 90, () => cmd({right: true})); v = G.F[0].vx; return v; };
   const normal = top(null), swift = top('swift');
   check(Math.abs(normal - RUN_MAX) < 1 && swift > normal * 1.25, `Swift: top speed ${Math.round(swift)} px/s (normal ${Math.round(normal)})`);
   const G = play(); givePower(G.F[0], 'long'); run(G, 1);

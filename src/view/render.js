@@ -11,7 +11,7 @@ import {C, isDark} from './theme.js';
 import {fx, ragdolls, swords, looks, view, decals} from './fx.js';
 import {drawBack, drawFront} from './backdrops.js';
 import {cam, updateCamera, viewRect} from './camera.js';
-import {drawItem, drawHeld, drawKnives} from './items.js';
+import {drawItems, drawHeld, drawKnives} from './items.js';
 
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d'), stage = document.getElementById('stage');
 function resize() {
@@ -135,6 +135,19 @@ function drawAimArrow(S, aim) {
   ctx.stroke(); ctx.globalAlpha = 1;
 }
 
+// Free cursor: a small ring with a dot in the middle, in the player's colour with a dark
+// outline so it shows on any background. Drawn in canvas pixels at the pointer (sx, sy are
+// CSS pixels), so it stays the same size whatever the zoom.
+function drawFreeCursor(aim) {
+  const k = cv.width / (cv.clientWidth || cv.width), x = aim.sx * k, y = aim.sy * k, r = 10 * k, col = aim.p ? C.green : C.red;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.lineCap = 'round';
+  for (const [c, w] of [[C.hall, 4.5 * k], [col, 2 * k]]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.fillStyle = C.hall; ctx.beginPath(); ctx.arc(x, y, 2.6 * k, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 1.6 * k, 0, Math.PI * 2); ctx.fill();
+}
+
 // What the camera keeps in view: each fencer (head to feet), or their body after a touch.
 function focusPoints(S) {
   const pts = [];
@@ -144,7 +157,8 @@ function focusPoints(S) {
 }
 
 let lastT = performance.now();
-// aim: {p, x, y} aim offset of the local mouse player, or null.
+// aim: the local mouse player's aim {p, x, y (offset from the shoulder), style, sx, sy (free cursor
+// position on the canvas, CSS pixels)}, or null.
 export function render(S, aim) {
   const now = performance.now(), rdt = Math.min(.1, (now - lastT) / 1000), t = now / 1000; lastT = now;
   const map = getMap(S), dark = isDark();
@@ -157,11 +171,12 @@ export function render(S, aim) {
   drawBack(ctx, map, v, dark, t); ctx.drawImage(decals, 0, 0, map.width, map.height);
   for (const r of ragdolls) drawRagdoll(r);
   for (const s of swords) drawSword(s);
-  drawItem(ctx, S, dark, t);
+  drawItems(ctx, S, dark, t);
   for (let p = 0; p < 2; p++) drawFighter(S.F[p], looks[p]);
   drawKnives(ctx, S); for (const f of S.F) drawHeld(ctx, f);
-  drawFx(); if (aim && settings.aimIndicator === 'arrow') drawAimArrow(S, aim);
+  drawFx(); if (aim && aim.style === 'arrow') drawAimArrow(S, aim);
   drawFront(ctx, map, v, dark, t);
   ctx.restore();
   screenSpace(); drawCallout(); drawMapLabel(S, map);
+  if (aim && aim.style === 'free') drawFreeCursor(aim);
 }

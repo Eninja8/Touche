@@ -24,9 +24,10 @@ import {showScreen, hideScreens, onBack} from '../ui/screens.js';
 import {openLobby, lobbyValues, setLobbyValues, setLobbyStatus, setLobbyError, setStartEnabled, setReadyButton} from '../ui/lobby.js';
 import {net, hooks, $, PROTOCOL, sendCtl, setBanner, roundKey} from './state.js';
 import {hostStartsMatch, beginMatch, tryStartRound, matchFrame, requestRematch} from './match.js';
+import {onPong, onInputPacket, resetStats, updateStats} from './netstats.js';
 
 const TIMEOUT_MS = 5000;     // no message for this long = disconnected
-const PING_MS = 500, RESEND_MS = 300;
+const PING_MS = 250, RESEND_MS = 300;
 const BYE = {t: 'ctl', id: 1e9, m: {t: 'bye'}}; // 'I am leaving' (sent once, no need to confirm)
 
 export const isActive = () => ['connected', 'wait', 'play', 'ko', 'over'].includes(net.phase);
@@ -105,7 +106,8 @@ const fakeNote = link => link.faked ? ` · fake lag ${link.faked.lag}±${link.fa
 
 function connected(link, me) {
   net.link = link; net.me = me; net.lobby = null; net.lastHeard = performance.now();
-  net.matchNo = 0; net.peerReady = 0; net.unacked.clear(); net.seen.clear(); net.ctlId = 1; net.rtt = 0;
+  net.matchNo = 0; net.peerReady = 0; net.unacked.clear(); net.seen.clear(); net.ctlId = 1; net.rtt = 0; net.seq = 0;
+  resetStats();
   setOnlinePlayer(me);
   link.onMessage(onMessage);
   link.onClose(() => disconnected('Opponent left.'));
@@ -162,12 +164,13 @@ function onMessage(m) {
       net.seen.add(m.id); handleCtl(m.m); return;
     case 'ack': net.unacked.delete(m.id); return;
     case 'in':
+      onInputPacket(m.q, m.ts, performance.now());
       if (net.session && m.r === net.session.round) net.session.receivePacket(m);
       else if (m.r > roundKey(hooks.app.S) && net.early.length < 300) net.early.push(m); // a round we haven't started yet
       return;
     case 'sum': if (net.session && m.r === net.session.round) net.session.addPeerSum(m.f, m.h); return;
     case 'ping': net.link.send({t: 'pong', ts: m.ts}); return;
-    case 'pong': { const r = performance.now() - m.ts; net.rtt = net.rtt ? net.rtt * .8 + r * .2 : r; return; }
+    case 'pong': { const r = performance.now() - m.ts; net.rtt = net.rtt ? net.rtt * .8 + r * .2 : r; onPong(r); return; }
   }
 }
 
@@ -204,6 +207,7 @@ function pump(now) {
     if (net.lastPacket && (net.phase === 'ko' || net.phase === 'wait')) net.link.send(net.lastPacket);
   }
   if (now - net.lastPing > PING_MS) { net.lastPing = now; net.link.send({t: 'ping', ts: now}); }
+  updateStats(now);
   if (now - net.lastHeard > TIMEOUT_MS) { disconnected('Connection lost.'); return; }
   if (now - net.lastHud > 1000) { net.lastHud = now; hooks.hud(); }
 }

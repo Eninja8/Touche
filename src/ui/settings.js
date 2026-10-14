@@ -14,14 +14,16 @@ export const ACTIONS = [['left', 'Move left'], ['right', 'Move right'], ['up', '
 const DEFAULT_LOBBY = {cpu: {diff: 'normal', map: 'round', hazards: true, powerups: true, target: 5}, local: {map: 'round', hazards: true, powerups: true, target: 5}, online: {map: 'round', hazards: true, powerups: true, target: 5}};
 
 // mouseAim: Red aims with the mouse (online: you aim with yours). sens: mouse sensitivity multiplier.
-// aimIndicator: 'arrow' or 'off' (the faint chevron showing where the mouse aims).
+// aimStyle: 'free' (a free pointer anywhere on screen), 'arrow' (a crosshair tied to the fencer, shown
+// as a faint chevron) or 'off' (the same crosshair, nothing drawn). netStats: the N overlay is showing.
 // fullscreenKey: optional key that toggles fullscreen (unbound by default).
-export const settings = {binds: JSON.parse(JSON.stringify(DEFAULT_BINDS)), volume: .8, muted: false, shake: true, blood: true, mouseAim: true, sens: 1, aimIndicator: 'arrow', fullscreenKey: null, lobby: JSON.parse(JSON.stringify(DEFAULT_LOBBY))};
+export const settings = {binds: JSON.parse(JSON.stringify(DEFAULT_BINDS)), volume: .8, muted: false, shake: true, blood: true, mouseAim: true, sens: 1, aimStyle: 'arrow', netStats: false, fullscreenKey: null, lobby: JSON.parse(JSON.stringify(DEFAULT_LOBBY))};
 
 try {
   const s = JSON.parse(localStorage.getItem('touche-settings') || 'null');
   if (s) {
-    for (const k of ['volume', 'muted', 'shake', 'blood', 'mouseAim', 'sens', 'aimIndicator', 'fullscreenKey']) if (k in s) settings[k] = s[k];
+    for (const k of ['volume', 'muted', 'shake', 'blood', 'mouseAim', 'sens', 'aimStyle', 'netStats', 'fullscreenKey']) if (k in s) settings[k] = s[k];
+    if (s.aimIndicator === 'off' && !s.aimStyle) settings.aimStyle = 'off'; // older saves: 'Aim indicator: Off'
     if (Array.isArray(s.binds)) for (let p = 0; p < 2; p++) for (const [a] of ACTIONS) if (s.binds[p] && typeof s.binds[p][a] === 'string') settings.binds[p][a] = s.binds[p][a];
     // older saves had one match length for everything
     if (typeof s.target === 'number') for (const m in settings.lobby) settings.lobby[m].target = s.target;

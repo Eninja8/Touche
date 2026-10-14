@@ -12,11 +12,25 @@ export const DASH_V = 760, DASH_T = 0.13, DASH_CD = 0.55, SLIDE_T = 0.42, SLIDE_
 // Blade: length, arm length and the aim limits (radians)
 export const BLADE = 76, ARM = 24, ANG_MIN = -1.15, ANG_MAX = 1.25;
 
+// How fast the blade turns (radians per second) when aiming with the mouse.
+// THE number to change for a faster or slower blade. Everything else about swinging
+// is a share of it, so changing it keeps the balance: the keyboard's raise/lower speed
+// (KEY_TURN), the CPU's blade (`ang` in ai.js), and the swing speeds that kill (LETHAL)
+// or beat (BEAT_SPEED, BEAT_MEET). A full-speed swing stays exactly as dangerous; it
+// just gets there sooner. (Was 9.5 until October 2026.)
+export const BLADE_TURN = 19;
+// How fast the point moves in a full-speed swing with a normal blade (px/s): 1900 at 19.
+export const FULL_SWING = BLADE_TURN * (ARM + BLADE);
+// Keyboard raise/lower keys turn the blade at this speed (rad/s).
+export const KEY_TURN = BLADE_TURN * .55;
+
 // When does a blade kill? (Thrusts are always lethal while the point is live.)
 // LETHAL: any part of the blade kills when it moves this fast (px/s) relative to the body: a swing.
 // TIP_LETHAL: the point (the outer TIP_ZONE of the blade) also kills when it is driven
 //   into the body this fast along the blade's direction: walking or running onto a point.
-export const LETHAL = 600, TIP_LETHAL = 250, TIP_ZONE = 0.15;
+// LETHAL is 63% of a full-speed swing (1197 px/s at BLADE_TURN 19): swung flat out, the
+// outer third of the blade kills, the same share as before the speed-up.
+export const LETHAL = Math.round(.63 * FULL_SWING), TIP_LETHAL = 250, TIP_ZONE = 0.15;
 // A harmless contact is solid: the body is shoved out of the blade (at most PUSH_MAX px per
 // tick) and the holder takes PUSH_HOLDER of that shove themselves.
 export const PUSH_MAX = 24, PUSH_HOLDER = 0.25;
@@ -29,7 +43,9 @@ export const PUSH_MAX = 24, PUSH_HOLDER = 0.25;
 // within the last BEAT_CD seconds, or the other blade is swinging back into it at
 // BEAT_MEET px/s or more. The beating swing itself can't kill until it slows below
 // BEAT_SPEED: the follow-up has to be a thrust or the point.
-export const BEAT_SPEED = 450, BEAT_RATIO = 0.5, BEAT_KNOCK = 1.3, BEAT_OPEN = 0.35, BEAT_CD = 0.6, BEAT_MEET = 200;
+// BEAT_SPEED and BEAT_MEET are shares of a full-speed swing (893 and 399 px/s at BLADE_TURN 19).
+export const BEAT_SPEED = Math.round(.47 * FULL_SWING), BEAT_MEET = Math.round(.21 * FULL_SWING);
+export const BEAT_RATIO = 0.5, BEAT_KNOCK = 1.3, BEAT_OPEN = 0.35, BEAT_CD = 0.6;
 
 // How long a key press is remembered if it can't be used straight away (seconds)
 export const PRESS_BUFFER = 0.13;
@@ -43,11 +59,10 @@ export const KO_TICKS = Math.round(1.5 * TICK_HZ);
 // Freeze frames when blades clash
 export const HITSTOP_TICKS = Math.ceil(0.045 * TICK_HZ);
 
-// Mouse aiming. The crosshair is an offset from the shoulder, in whole pixels,
-// kept within AIM_REACH. The blade turns toward it at most MOUSE_TURN rad/s
-// (fast enough that a full swing is lethal). Within AIM_DEADZONE pixels of
-// straight up/down, the fencer keeps facing the same way.
-export const AIM_REACH = 160, MOUSE_TURN = 9.5, AIM_DEADZONE = 3;
+// Mouse aiming. The aim is an offset from the shoulder, in whole pixels, kept within
+// AIM_REACH. The blade turns toward it at BLADE_TURN (above). Within AIM_DEADZONE
+// pixels of straight up/down, the fencer keeps facing the same way.
+export const AIM_REACH = 160, AIM_DEADZONE = 3;
 
 // Power-ups (Power-ups On in the lobby; see powerups.js). One is waiting on the map when a
 // round starts, and another appears POWER_AGAIN seconds after the last was taken, at one of

@@ -16,6 +16,7 @@ import {getMap, MAPS, MAP_KEYS, DEFAULT_MAP} from './maps.js';
 import {hazardHit, pushX} from './terrain.js';
 import {emit} from './events.js';
 import {resetPowerups, updatePowerups, throwKnife, updateKnives} from './powerups.js';
+import {foeOf} from './foes.js';
 
 // A brand-new game state with nothing carried over.
 function freshState(seed) {
@@ -27,7 +28,7 @@ function freshState(seed) {
     round: 0,           // round number within the current match (online play uses it to stay in step)
     scores: [0, 0], koWho: null, clashCD: 0, hitstop: 0, demoRounds: 0,
     F: [null, null], inp: [mkInput(), mkInput()], AI: [mkAI(), mkAI()],
-    item: null, itemT: 0, knives: [], // power-ups: the one on the map, ticks until the next, knives in flight
+    items: [], itemT: 0, wave: 0, knives: [], // power-ups: pickups on the map, ticks until the next wave, wave number, knives in flight
   };
 }
 
@@ -107,10 +108,13 @@ function endRound(S) {
 // aim is the mouse crosshair's offset from the shoulder. It is rounded to whole
 // pixels here, so every machine sees exactly the same value ("|| 0" turns minus
 // zero into plain zero; see codec.js).
-function applyCommand(i, cmd) {
+// Presses only count once the fight is on (`acting`): a press during the countdown (or
+// one left over from the touch that ended the last round) is thrown away, not saved
+// up to fire at "ALLEZ !". A key still held from then does nothing until pressed again.
+function applyCommand(i, cmd, acting) {
   if (!cmd) return;
   for (const k in cmd.held) i[k] = cmd.held[k];
-  for (const a of cmd.presses) i.buf[a] = PRESS_BUFFER;
+  if (acting) for (const a of cmd.presses) i.buf[a] = PRESS_BUFFER;
   const q = v => Math.round(clamp(v, -AIM_REACH, AIM_REACH)) || 0;
   i.aim = cmd.aim ? {x: q(cmd.aim.x), y: q(cmd.aim.y)} : null;
 }
@@ -127,7 +131,10 @@ function updateFlow(S) {
     if (S.timer === 0) { emit('callout', {text: 'EN GARDE', color: 'ink', dur: .55}); emit('sfx', {name: 'ready'}); }
     S.timer++;
     if (S.timer === COUNTDOWN_READY) { emit('callout', {text: 'PRÊTS ?', color: 'ink', dur: .45}); emit('sfx', {name: 'ready'}); }
-    if (S.timer === COUNTDOWN_GO) { emit('callout', {text: 'ALLEZ !', color: 'spark', dur: .55}); emit('sfx', {name: 'allez'}); S.phase = 'fight'; }
+    if (S.timer === COUNTDOWN_GO) {
+      emit('callout', {text: 'ALLEZ !', color: 'spark', dur: .55}); emit('sfx', {name: 'allez'}); S.phase = 'fight';
+      for (const i of S.inp) for (const k in i.buf) i.buf[k] = 0; // everyone starts the fight with nothing queued (the CPU too)
+    }
   } else if (S.phase === 'ko') {
     if (++S.timer > KO_TICKS) endRound(S);
   }
@@ -137,13 +144,13 @@ function updateFlow(S) {
 // Returns false during clash freeze-frames (nothing moved), true otherwise.
 export function step(S, cmds) {
   S.tick++;
-  for (let p = 0; p < 2; p++) if (!isAI(S, p)) applyCommand(S.inp[p], cmds[p]);
+  for (let p = 0; p < S.F.length; p++) if (!isAI(S, p)) applyCommand(S.inp[p], cmds[p], S.phase !== 'countdown');
   if (S.hitstop > 0) { S.hitstop--; return false; }
 
   const dt = DT, map = getMap(S), ph = S.phase, live = ph === 'fight' || ph === 'ko' || ph === 'over';
-  for (let p = 0; p < 2; p++) if (isAI(S, p)) aiStep(S, p, dt);
+  for (let p = 0; p < S.F.length; p++) if (isAI(S, p)) aiStep(S, p, dt);
   const [a, b] = S.F;
-  if (live) { updateFighter(a, S.inp[0], b, dt, map); updateFighter(b, S.inp[1], a, dt, map); }
+  if (live) S.F.forEach((f, p) => updateFighter(f, S.inp[p], foeOf(S, f), dt, map));
   else for (const f of S.F) if (f.alive) finishPose(f);
 
   // bodies don't overlap
@@ -168,7 +175,7 @@ export function step(S, cmds) {
 
   // power-ups: pickups, throwing the knife, knives in flight (powerups.js)
   if (S.mode.powerups && live) {
-    for (let p = 0; p < 2; p++) {
+    for (let p = 0; p < S.F.length; p++) {
       const f = S.F[p], i = S.inp[p];
       if (i.buf.throw > 0 && (!f.knife || !f.alive)) i.buf.throw = 0; // a throw with no knife is just ignored
       if (i.buf.throw > 0 && f.stunT <= 0) { i.buf.throw = 0; throwKnife(S, f); }

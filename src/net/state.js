@@ -1,7 +1,7 @@
 // Shared state for online play (used by online.js and match.js): the connection
 // and match status, the hooks into the rest of the game, and small helpers.
 
-export const PROTOCOL = 9;   // bump when online play or gameplay changes, so mismatched versions refuse to play
+export const PROTOCOL = 10;   // bump when online play or gameplay changes, so mismatched versions refuse to play
 export const $ = id => document.getElementById(id);
 
 // Set by initOnline: {app, dispatch, hud}
@@ -12,7 +12,7 @@ export const net = {
   lobby: null, link: null, me: 0, matchNo: 0,
   session: null, early: [],        // inputs that arrived before our round started
   peerReady: 0, lastPacket: null,  // last input packet, re-sent while waiting (in case it was lost)
-  acc: 0, slow: 0, syncWait: 0, fake: '',
+  acc: 0, slow: 0, syncWait: 0, fake: '', seq: 0, // seq: number of the last input packet sent
   rtt: 0, lastHeard: 0, lastPing: 0, lastHud: 0, lastResend: 0,
   ctlId: 1, unacked: new Map(), seen: new Set(),
   stallSince: null, kills: {}, rematch: {me: false, peer: false}, desync: false,

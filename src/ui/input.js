@@ -1,16 +1,17 @@
 // Keyboard and mouse. Turns what the player is doing into one "command" per
 // player per tick, which is the only way input reaches the simulation:
 //   {held: {left,right,up,down,raise,lower}, presses: ['attack', 'throw', ...], aim: {x,y} | null}
-// `aim` is the mouse crosshair's offset from the shoulder (see mouse.js), or
+// `aim` is the direction from the shoulder to the mouse crosshair (see mouse.js), or
 // null for keyboard aiming. For online play, these small commands are exactly
 // what gets sent over the network.
 
 import {isAI} from '../sim/game.js';
 import {settings} from './settings.js';
 import {unlockAudio, toggleMute} from '../view/audio.js';
-import {cross, isLocked, requestLock, lostRecently} from './mouse.js';
+import {aimOffset, isLocked, requestLock, lostRecently} from './mouse.js';
 import {toggleFullscreen} from './menus.js';
 import {menuKey} from './screens.js';
+import {toggleNetStats} from './netpanel.js';
 
 const keys = new Set();                // physical keys currently held down
 const presses = [new Set(), new Set()]; // taps waiting for the next tick, per key layout (0 = Red keys + mouse, 1 = Green keys)
@@ -34,7 +35,9 @@ const activeLayouts = S => S.mode.online ? [0] : [0, 1].filter(p => !isAI(S, p))
 // online it's whichever player this computer controls.
 export const mousePlayer = S => S.mode.demo || !settings.mouseAim ? -1 : S.mode.online ? onlinePlayer : 0;
 
-export function clearKeys() { keys.clear(); }
+export function clearKeys() { keys.clear(); clearPresses(); }
+// Forget taps not yet sent to the game (a new round starts with nothing queued).
+export function clearPresses() { presses[0].clear(); presses[1].clear(); }
 
 // Build this tick's commands and use up the waiting taps.
 export function sampleCommands(S) {
@@ -42,7 +45,7 @@ export function sampleCommands(S) {
   for (let p = 0; p < 2; p++) {
     const b = bind(S, p), held = {};
     for (const a of HELD) held[a] = b[a].some(c => keys.has(c));
-    const aim = p === mp ? {x: Math.round(cross.x) || 0, y: Math.round(cross.y) || 0} : null;
+    const a = p === mp ? aimOffset(S, p) : null, aim = a ? {x: Math.round(a.x) || 0, y: Math.round(a.y) || 0} : null;
     cmds.push({held, presses: [...presses[p]], aim});
     presses[p].clear();
   }
@@ -53,7 +56,7 @@ export function sampleCommands(S) {
 export function sampleOnline(S) {
   const b = bind(S, 0), held = {};
   for (const a of HELD) held[a] = b[a].some(c => keys.has(c));
-  const aim = mousePlayer(S) >= 0 ? {x: cross.x, y: cross.y} : null;
+  const aim = mousePlayer(S) >= 0 ? aimOffset(S, onlinePlayer) : null;
   const cmd = {held, presses: [...presses[0]], aim};
   presses[0].clear(); presses[1].clear();
   return cmd;
@@ -76,6 +79,7 @@ export function initInput(app, ui) {
     if (playing && (GAME_CODES.has(e.code) || bound)) e.preventDefault();
     if (e.repeat) return;
     if (e.code === 'KeyM') { toggleMute(); ui.syncSettingsUI(); return; }
+    if (e.code === 'KeyN') { toggleNetStats(); return; }
     if (e.code === 'Escape') {
       if (lostRecently()) return; // this Esc just released the mouse; the game already paused
       if (S.phase === 'over' && !S.mode.demo && !S.mode.online) { app.showMenu(); return; }

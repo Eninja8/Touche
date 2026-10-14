@@ -4,7 +4,7 @@
 import {
   DT, GRAV, JUMP_V, DJUMP_V, RUN_MAX, CROUCH_MAX, RUN_ACC, AIR_ACC,
   GROUND_FRIC, AIR_FRIC, DASH_V, DASH_T, DASH_CD, SLIDE_T, SLIDE_V, BLADE, ARM, ANG_MIN, ANG_MAX,
-  MOUSE_TURN, AIM_DEADZONE, BEAT_SPEED, SWIFT_RUN, SWIFT_DASH_CD, AIR_DASHES, AIR_DASH_CD,
+  BLADE_TURN, KEY_TURN, AIM_DEADZONE, BEAT_SPEED, SWIFT_RUN, SWIFT_DASH_CD, AIR_DASHES, AIR_DASH_CD,
 } from './constants.js';
 import {clamp, lerp, ik} from './util.js';
 import {emit} from './events.js';
@@ -17,8 +17,8 @@ export function mkFighter(id, x, y, face) {
     slideT: 0, dashT: 0, dashCD: 0, airDash: true, airJump: true, wallSide: 0, wallT: 0, coyote: 0, dropT: 0, speedT: 0, padUp: false,
     grip: 1, rope: -1, ropeCD: 0, climbing: false, // grip of the ground underfoot (ice is low); rope: index of the rope held, or -1
     angle: .18, deflect: 0, lunge: null, lungeCD: 0, stunT: 0, noLethal: 0, beatT: 0, beatCD: 0, swingLock: false, alive: true, phase: 0,
-    power: null, blade: BLADE, knife: false, airDashN: 0, // power-up held (powerups.js), blade length, knife ready, air dashes used this jump
-    P: null, prevHand: null, prevTip: null, tipSpeed: 0, swingSpeed: 0, swingRate: 0, prevAng: null, angSpd: 5.2,
+    power: null, blade: BLADE, knife: false, airDashN: 0, took: -1, // power-up held (powerups.js), blade length, knife ready, air dashes used this jump, last power-up wave taken from
+    P: null, prevHand: null, prevTip: null, tipSpeed: 0, swingSpeed: 0, swingRate: 0, prevAng: null, angSpd: KEY_TURN,
   };
 }
 
@@ -109,7 +109,7 @@ export function finishPose(f, flipped) {
 function turnBlade(f, i, stunned, dt) {
   const spdMul = stunned ? .4 : 1;
   if (i.aim) {
-    const tg = clamp(Math.atan2(-i.aim.y, i.aim.x * f.face), ANG_MIN, ANG_MAX), sp = MOUSE_TURN * spdMul;
+    const tg = clamp(Math.atan2(-i.aim.y, i.aim.x * f.face), ANG_MIN, ANG_MAX), sp = BLADE_TURN * spdMul;
     f.angle = clamp(f.angle + clamp(tg - f.angle, -sp * dt, sp * dt), ANG_MIN, Math.PI - ANG_MIN);
   } else { const ad = (i.raise ? 1 : 0) - (i.lower ? 1 : 0); f.angle = clamp(f.angle + ad * f.angSpd * spdMul * dt, ANG_MIN, ANG_MAX); }
   f.deflect *= Math.exp(-7 * dt);

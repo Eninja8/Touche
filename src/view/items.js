@@ -1,4 +1,4 @@
-// Draws the power-ups: the pickup waiting on the map (a glowing gold token with an icon),
+// Draws the power-ups: the pickups waiting on the map (a glowing gold token with an icon),
 // a small icon over the head of whoever holds one, and knives in flight. The pickup is
 // gold so it never looks like the orange-red danger colour of hazards. Purely cosmetic.
 
@@ -26,9 +26,10 @@ export function icon(ctx, kind, x, y, s, c) {
   ctx.restore();
 }
 
-// The pickup waiting on the map: bobbing, glowing, with a slowly turning ring of sparkles.
-export function drawItem(ctx, S, dark, t) {
-  const it = S.item; if (!it) return;
+// The pickups waiting on the map: bobbing, glowing, with a slowly turning ring of sparkles.
+export function drawItems(ctx, S, dark, t) { for (const it of S.items || []) drawItem(ctx, it, dark, t); }
+
+function drawItem(ctx, it, dark, t) {
   const y = it.y + Math.sin(t * 3) * 4, pulse = .5 + .5 * Math.sin(t * 5);
   glow(ctx, it.x, y, 46, 'rgba(255,216,74,.9)', (dark ? .45 : .35) + pulse * .15, dark);
   ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(it.x, y, 15, 0, Math.PI * 2); ctx.fill();
