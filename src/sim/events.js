@@ -1,0 +1,12 @@
+// The simulation never plays sounds or draws anything itself. Instead it writes
+// small notes ("events") such as {type:'sfx', name:'clash'} into a list.
+// After each tick, main.js reads the list and passes it to the sound, effects
+// and menu code. Later, during online rollback, the game re-runs old ticks and
+// can simply throw these notes away so sounds don't play twice.
+
+let list = [];
+
+export function emit(type, data) { list.push({type, ...data}); }
+
+// Hand over everything emitted since the last call, and start a fresh list.
+export function drain() { const out = list; list = []; return out; }

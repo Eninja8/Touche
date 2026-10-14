@@ -1,0 +1,11 @@
+{
+  "name": "touche",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Touché: 1v1 stick-figure fencing where one touch kills.",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node tools/determinism-test.mjs"
+  }
+}
