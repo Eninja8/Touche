@@ -2,11 +2,13 @@
   "name": "touche",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "description": "Touché: 1v1 stick-figure fencing where one touch kills.",
   "type": "module",
   "scripts": {
     "start": "node tools/serve.mjs",
-    "test": "node tools/determinism-test.mjs && node tools/netcode-test.mjs"
+    "test": "node tools/determinism-test.mjs && node tools/maps-test.mjs && node tools/netcode-test.mjs"
   }
 }

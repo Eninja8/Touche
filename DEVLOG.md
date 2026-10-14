@@ -185,3 +185,8 @@ Owner's request: fencers could walk into each other and the point passed through
   - random maps: same seed, same maps, never the same map twice in a row
   - a new netcode run with random maps each round and hazards on (100 ms, 5% loss): both players agree
 - *Browser checks:* screenshots of every map in light and dark; a vs CPU match on random maps played to game over with no errors; a two-window online match with random maps, 93 ms ping and 2% loss had matching scores and no errors. Online version bumped to 7.
+- *Housekeeping:*
+  - `src/net/online.js` had grown past the file-size rule (391 lines), so it's now three files: `online.js` (lobby, messages, leaving), `match.js` (match flow, rollback loop, KOs, rematches) and `state.js` (shared state).
+  - The map tests moved to `tools/maps-test.mjs` (part of `npm test`).
+  - Two-window tests re-run after the split: Ready flow, a match at about 93 ms with 2% loss, rematch, disconnect and the mouse grab all behave the same, with no errors.
+- *Mistake fixed:* a local test run started from the project folder put a throwaway browser profile (67 MB, a fresh headless profile used only on localhost) and 14 map screenshots into the Phase C commit, which was pushed. They were removed in the next commit and are now ignored by `.gitignore`. They are still in the git history.

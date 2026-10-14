@@ -26,7 +26,7 @@ Click **Play → Online → Host** and send the 4-letter code to a friend. They 
 npm test
 ```
 
-This checks that the simulation is deterministic (the same inputs always produce exactly the same game), then runs two simulated online players through a fake bad network and checks their games stay identical.
+This checks that the simulation is deterministic (the same inputs always produce exactly the same game) and that the combat rules and every map behave as intended, then runs two simulated online players through a fake bad network and checks their games stay identical.
 
 ## Folder layout
 

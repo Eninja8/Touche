@@ -27,11 +27,11 @@ New to coding; Claude does most of the work. Explain things in plain language, a
 - `src/ui/input.js` turns keys and mouse into per-tick **commands** `{held, presses, aim}` (`aim` = mouse crosshair offset from the shoulder in whole pixels, or null for keyboard aiming; `src/ui/mouse.js` handles pointer lock). Those commands are the only way input reaches the sim, and they're what online play will send over the network.
 - `src/view/` (render, fx, audio, theme) only reads the sim and reacts to its events. It may use `Math.random` because it's purely cosmetic.
 - `src/main.js` runs the fixed-tick loop for local play. KO slow motion only changes how fast ticks are fed in; it never changes the tick itself.
-- `src/net/` is online play. `rollback.js` (pure, testable in Node): 2-tick input delay, up to 12 ticks of prediction, rewind-and-replay, confirmed frames, state fingerprints. `codec.js` packs inputs. `transport.js` wraps PeerJS (swap this for Steam later). `online.js` runs the lobby, ready handshakes, the rollback loop, confirmed KOs (then a local slow-mo KO replay with no inputs) and rematches.
+- `src/net/` is online play. `rollback.js` (pure, testable in Node): 2-tick input delay, up to 12 ticks of prediction, rewind-and-replay, confirmed frames, state fingerprints. `codec.js` packs inputs. `transport.js` wraps PeerJS (swap this for Steam later). `online.js` runs the lobby (Ready, Start), messages and leaving; `match.js` runs the match: ready handshakes, the rollback loop, confirmed KOs (then a local slow-mo KO replay with no inputs) and rematches; `state.js` holds what both share.
 - Online rules: anything a rollback could undo must not be announced. Ragdolls show at once but are provisional; the TOUCHÉ callout, lamps and points wait for confirmation. `newMatch` wipes the whole state so both computers start identical.
 - Maps are data in `src/sim/maps.js`; the match stores the map name in `S.map` and the Hazards choice in `S.mode.hazards` (`getMap(S)` returns the map with hazards applied). Arena collision, ring-out and falls are in `src/sim/terrain.js`; each map is painted by `src/view/backdrops.js`.
 - Gameplay numbers worth tweaking live in `src/sim/constants.js` (blade lethality, push, beats) and `src/sim/ai.js` (`DIFF`, per difficulty). DEVLOG.md lists the current values.
 
 ## Commands
 - `npm start`: local server at http://localhost:8080
-- `npm test`: determinism test and netcode test (`tools/determinism-test.mjs`, `tools/netcode-test.mjs`)
+- `npm test`: determinism test, map test and netcode test (`tools/determinism-test.mjs`, `tools/maps-test.mjs`, `tools/netcode-test.mjs`)
