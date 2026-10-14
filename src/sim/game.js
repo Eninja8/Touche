@@ -6,7 +6,7 @@
 //  - Everything lives in S, so `snapshot(S)` saves the game and restoring it rewinds.
 //  - Same S + same commands in = same S out, on any machine.
 
-import {DT, LEFT, RIGHT, CENTER, PX_M, PRESS_BUFFER, COUNTDOWN_READY, COUNTDOWN_GO, KO_TICKS} from './constants.js';
+import {DT, LEFT, RIGHT, CENTER, PX_M, PRESS_BUFFER, AIM_REACH, COUNTDOWN_READY, COUNTDOWN_GO, KO_TICKS} from './constants.js';
 import {clamp, segSeg} from './util.js';
 import {mkFighter, mkInput, finishPose, updateFighter} from './fighter.js';
 import {bladeContact, clash, kill} from './combat.js';
@@ -71,11 +71,13 @@ function endRound(S) {
 
 // Copy a human's command for this tick into their input record.
 // cmd = {held: {left,right,up,down,raise,lower}, presses: ['attack', ...], aim: {x,y} | null}
+// aim is the mouse crosshair's offset from the shoulder. It is rounded to whole
+// pixels here, so every machine sees exactly the same value.
 function applyCommand(i, cmd) {
   if (!cmd) return;
   for (const k in cmd.held) i[k] = cmd.held[k];
   for (const a of cmd.presses) i.buf[a] = PRESS_BUFFER;
-  i.aim = cmd.aim;
+  i.aim = cmd.aim ? {x: Math.round(clamp(cmd.aim.x, -AIM_REACH, AIM_REACH)), y: Math.round(clamp(cmd.aim.y, -AIM_REACH, AIM_REACH))} : null;
 }
 
 // Countdown calls and the pause after a touch.

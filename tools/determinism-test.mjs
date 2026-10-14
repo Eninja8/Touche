@@ -31,7 +31,8 @@ function scripted(tick) {
   if (tick % 37 === 0) presses.push('attack');
   if (tick % 211 === 0) presses.push('dash');
   if (tick % 97 === 0) presses.push('up');
-  return [{held, presses, aim: tick % 500 < 250 ? null : {x: 480 + 200 * Math.cos(tick / 50), y: 300}}, null];
+  // half the time keyboard aim, half the time a mouse crosshair sweeping across the body
+  return [{held, presses, aim: tick % 500 < 250 ? null : {x: 150 * Math.cos(tick / 40), y: -60 + 70 * Math.sin(tick / 23)}}, null];
 }
 
 function play(seed, ticks, S0) {
@@ -57,6 +58,24 @@ check(first === second, 'rewinding to a saved state and replaying gives the iden
 // demo bout (both CPU) also deterministic
 const demo = seed => { const G = createGame(1); newMatch(G, {demo: true, seed}); for (let t = 0; t < 15000; t++) { step(G, [null, null]); drain(); } return JSON.stringify(G); };
 check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
+
+// 4. mouse aiming feel: turning around must not snap the blade, and a swing over the top is lethal
+{
+  const G = createGame(1); newMatch(G, {demo: false, vsCPU: false, seed: 5});
+  const idle = {left: false, right: false, up: false, down: false, raise: false, lower: false};
+  const run = (aim, n) => { for (let k = 0; k < n; k++) { step(G, [{held: idle, presses: [], aim}, {held: idle, presses: [], aim: null}]); drain(); } };
+  run({x: 100, y: 0}, 200); // through the countdown, blade level and forward
+  const f = G.F[0], dir = () => Math.atan2(f.P.tip.y - f.P.hand.y, f.P.tip.x - f.P.hand.x);
+  const before = dir(), face0 = f.face;
+  run({x: -100 * face0, y: 0}, 1); // crosshair jumps behind: fencer turns this tick
+  const turn = Math.abs(Math.atan2(Math.sin(dir() - before), Math.cos(dir() - before)));
+  check(f.face === -face0, 'mouse player turns to face the crosshair');
+  check(turn < 0.1, `blade keeps its world direction when turning (moved ${turn.toFixed(3)} rad in one tick)`);
+  let maxSpeed = 0, maxTipY = 1e9; const startY = f.P.sh.y;
+  for (let k = 0; k < 60; k++) { run({x: -100 * face0, y: 0}, 1); maxSpeed = Math.max(maxSpeed, f.tipSpeed); maxTipY = Math.min(maxTipY, f.P.tip.y); }
+  check(maxTipY < startY - 60, 'the blade swings over the top to the new side');
+  check(maxSpeed >= 600, `that swing is fast enough to be lethal (${Math.round(maxSpeed)} px/s)`);
+}
 
 console.log(failed ? '\nSome checks FAILED.' : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

@@ -31,3 +31,9 @@ export const COUNTDOWN_GO = TICK_HZ;                        // "ALLEZ !" after 1
 export const KO_TICKS = Math.round(1.5 * TICK_HZ);
 // Freeze frames when blades clash
 export const HITSTOP_TICKS = Math.ceil(0.045 * TICK_HZ);
+
+// Mouse aiming. The crosshair is an offset from the shoulder, in whole pixels,
+// kept within AIM_REACH. The blade turns toward it at most MOUSE_TURN rad/s
+// (fast enough that a full swing is lethal). Within AIM_DEADZONE pixels of
+// straight up/down, the fencer keeps facing the same way.
+export const AIM_REACH = 160, MOUSE_TURN = 9.5, AIM_DEADZONE = 3;

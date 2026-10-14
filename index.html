@@ -15,14 +15,15 @@
 </head>
 <body>
 <main class="wrap">
-  <header class="box" aria-label="Scoring box">
-    <div class="side p1"><span class="lamp" id="lamp1"></span><div><div class="who" id="n1">Red</div><div class="score" id="s1">0</div></div></div>
-    <div class="mid"><div class="brand">Touch<span class="acc">é</span></div><div class="sub" id="status">First to 5 · one touch kills</div></div>
-    <div class="side p2"><span class="lamp" id="lamp2"></span><div><div class="who" id="n2">Green</div><div class="score" id="s2">0</div></div></div>
-  </header>
-
   <div class="stage" id="stage">
     <canvas id="cv" aria-label="Fencing arena"></canvas>
+
+    <header class="box" aria-label="Scoring box">
+      <div class="side p1"><span class="lamp" id="lamp1"></span><div><div class="who" id="n1">Red</div><div class="score" id="s1">0</div></div></div>
+      <div class="mid"><div class="brand">Touch<span class="acc">é</span></div><div class="sub" id="status">First to 5 · one touch kills</div></div>
+      <div class="side p2"><span class="lamp" id="lamp2"></span><div><div class="who" id="n2">Green</div><div class="score" id="s2">0</div></div></div>
+    </header>
+
     <div class="overlay" id="menu">
       <div class="panel">
         <h1 class="title">Touch<span class="acc">é</span></h1>
@@ -31,13 +32,15 @@
           <button class="btn" id="b2p" type="button">Duel a friend</button>
           <button class="btn ghost" id="bcpu" type="button">Duel the CPU</button>
           <button class="btn ghost" id="bset1" type="button">Settings</button>
+          <button class="btn ghost fsbtn" data-fs type="button">Fullscreen</button>
         </div>
         <div class="seg" role="radiogroup" aria-label="CPU difficulty">
           <label><input type="radio" name="diff" id="d-easy" value="easy"><span>Easy</span></label>
           <label><input type="radio" name="diff" id="d-normal" value="normal" checked><span>Normal</span></label>
           <label><input type="radio" name="diff" id="d-hard" value="hard"><span>Hard</span></label>
         </div>
-        <p class="hint">Friend: two players, one keyboard. CPU: aim your blade with the mouse. Controls and sound are in Settings.</p>
+        <p class="hint">Red aims with the mouse (click to thrust, right-click to dash) and moves with WASD. Green uses the keyboard. Mouse aiming can be turned off in Settings.</p>
+        <p class="touch-note">Touché needs a keyboard and mouse. Open this page on a computer to play.</p>
       </div>
     </div>
     <div class="overlay" id="pause" hidden>
@@ -46,9 +49,11 @@
         <div class="btns">
           <button class="btn" id="bresume" type="button">Resume</button>
           <button class="btn ghost" id="bset2" type="button">Settings</button>
+          <button class="btn ghost fsbtn" data-fs type="button">Fullscreen</button>
           <button class="btn ghost" id="bquit" type="button">Quit to menu</button>
         </div>
-        <p class="hint">Esc to resume</p>
+        <p class="hint" id="pauseHint">Esc to resume</p>
+        <p class="note" id="pauseNote" aria-live="polite"></p>
       </div>
     </div>
     <div class="overlay" id="over" hidden>
@@ -64,7 +69,8 @@
     </div>
     <div class="overlay" id="settings" hidden>
       <div class="panel wide" role="dialog" aria-labelledby="setTitle">
-        <div class="set-head"><p class="big sm" id="setTitle">Settings</p><button class="btn small" id="bclose" type="button">Done</button></div>
+        <div class="set-head"><p class="big sm" id="setTitle">Settings</p>
+          <div class="btns"><button class="btn ghost small fsbtn" data-fs type="button">Fullscreen</button><button class="btn small" id="bclose" type="button">Done</button></div></div>
         <div class="tabs" role="tablist">
           <button type="button" role="tab" data-tab="controls" id="t-controls">Controls</button>
           <button type="button" role="tab" data-tab="sound" id="t-sound">Sound</button>
@@ -72,8 +78,17 @@
           <button type="button" role="tab" data-tab="how" id="t-how">How to play</button>
         </div>
         <section class="pane" data-pane="controls">
+          <div class="row"><span class="lbl">Aim with mouse</span>
+            <div class="seg" role="radiogroup" aria-label="Aim with mouse">
+              <label><input type="radio" name="mouseaim" value="on"><span>Red uses mouse</span></label>
+              <label><input type="radio" name="mouseaim" value="off"><span>Off</span></label>
+            </div>
+          </div>
+          <label class="row" for="sens"><span class="lbl">Mouse sensitivity</span><input type="range" id="sens" min="20" max="400" step="5"><output id="sensOut" for="sens">1.00</output></label>
+          <p class="hint">Mouse on: against the CPU you are Red; with a friend, Red aims with the mouse and Green uses the keyboard. Online, each player uses their own mouse. Off: everyone uses keys to raise and lower the blade.</p>
           <div class="tablewrap"><table class="binds"><thead><tr><th>Action</th><th class="p1">Red</th><th class="p2">Green</th></tr></thead><tbody id="bindRows"></tbody></table></div>
-          <p class="hint">Click a key, then press the new one. Esc cancels. Against the CPU, Red can also use the mouse (aim, click to thrust, right-click to dash), the arrow keys and Space.</p>
+          <div class="row"><span class="lbl">Fullscreen key</span><button type="button" class="key" id="key-fs">Not set</button><button class="btn ghost small" id="bclearFs" type="button">Clear</button></div>
+          <p class="hint">Click a key, then press the new one. Esc cancels. Against the CPU, Red can also use the arrow keys, Space and Left Shift.</p>
           <p class="note" id="bindNote" aria-live="polite"></p>
           <button class="btn ghost small" id="bresetKeys" type="button">Reset to defaults</button>
         </section>
@@ -97,18 +112,16 @@
         <section class="pane how" data-pane="how" hidden>
           <ul>
             <li><strong>One touch kills.</strong> A thrust's point is always lethal. So is any blade moving fast enough: flick it, dash with it, drop on someone.</li>
+            <li><strong>Mouse aiming.</strong> Your blade follows the crosshair. Move the crosshair behind you to turn around; whip it across your body to swing the blade over the top.</li>
             <li><strong>Blades clash.</strong> Meet a thrust with your blade to parry it and stun the attacker for a free riposte.</li>
             <li><strong>Coup double.</strong> Touch each other at the same instant and nobody scores.</li>
             <li><strong>Move a lot.</strong> Jump twice, kick off walls, slide under a high blade while running, dash, or backstep by dashing with no direction held.</li>
-            <li>Esc pauses. M mutes.</li>
+            <li>Esc pauses (and frees the mouse). M mutes.</li>
           </ul>
         </section>
       </div>
     </div>
   </div>
-
-  <p class="touch-note">Touché needs a keyboard. Open this page on a computer to play.</p>
-
 </main>
 </body>
 </html>

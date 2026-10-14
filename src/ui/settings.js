@@ -7,12 +7,14 @@ export const DEFAULT_BINDS = [
 ];
 export const ACTIONS = [['left', 'Move left'], ['right', 'Move right'], ['up', 'Jump'], ['down', 'Crouch · slide · drop'], ['raise', 'Raise blade'], ['lower', 'Lower blade'], ['attack', 'Thrust'], ['dash', 'Dash']];
 
-export const settings = {binds: JSON.parse(JSON.stringify(DEFAULT_BINDS)), volume: .8, muted: false, target: 5, shake: true, blood: true};
+// mouseAim: Red aims with the mouse (online: you aim with yours). sens: mouse sensitivity multiplier.
+// fullscreenKey: optional key that toggles fullscreen (unbound by default).
+export const settings = {binds: JSON.parse(JSON.stringify(DEFAULT_BINDS)), volume: .8, muted: false, target: 5, shake: true, blood: true, mouseAim: true, sens: 1, fullscreenKey: null};
 
 try {
   const s = JSON.parse(localStorage.getItem('touche-settings') || 'null');
   if (s) {
-    for (const k of ['volume', 'muted', 'target', 'shake', 'blood']) if (k in s) settings[k] = s[k];
+    for (const k of ['volume', 'muted', 'target', 'shake', 'blood', 'mouseAim', 'sens', 'fullscreenKey']) if (k in s) settings[k] = s[k];
     if (Array.isArray(s.binds)) for (let p = 0; p < 2; p++) for (const [a] of ACTIONS) if (s.binds[p] && typeof s.binds[p][a] === 'string') settings.binds[p][a] = s.binds[p][a];
   }
 } catch (e) {}

@@ -11,8 +11,9 @@ import {DT} from './sim/constants.js';
 import {createGame, newMatch, step} from './sim/game.js';
 import {drain} from './sim/events.js';
 import {settings} from './ui/settings.js';
-import {initInput, sampleCommands, clearKeys, resetMouseAim} from './ui/input.js';
-import {initMenus, hud, setLamp, showGameOver, selectedDifficulty, menuEl, pauseEl, overEl, setEl} from './ui/menus.js';
+import {initInput, sampleCommands, clearKeys, mousePlayer} from './ui/input.js';
+import {initMenus, hud, setLamp, showGameOver, selectedDifficulty, setPauseHint, setPauseNote, menuEl, pauseEl, overEl, setEl} from './ui/menus.js';
+import {cross, resetCross, isLocked, requestLock, releaseLock, onLockChange} from './ui/mouse.js';
 import {unlockAudio, sfx} from './view/audio.js';
 import {C} from './view/theme.js';
 import {fx, view, puff, sparks, callout, onKill, resetRound, clearDecals, updateFx, updateRealtime} from './view/fx.js';
@@ -23,6 +24,10 @@ import {render} from './view/render.js';
 const newSeed = () => (Math.random() * 4294967296) >>> 0;
 
 let slow = 0; // seconds of KO slow motion left (real time)
+let resumeWanted = false; // waiting for the mouse lock before un-pausing
+
+// Does the match need the mouse locked right now?
+const wantsLock = () => mousePlayer(app.S) >= 0 && !app.paused && app.S.phase !== 'over';
 
 const app = {
   S: createGame(newSeed()),
@@ -31,23 +36,48 @@ const app = {
   startMatch(vsCPU) {
     unlockAudio();
     app.paused = false; setEl.hidden = true; menuEl.hidden = true; pauseEl.hidden = true; overEl.hidden = true;
-    resetMouseAim();
+    if (settings.mouseAim) requestLock().catch(() => {});
     newMatch(app.S, {demo: false, vsCPU, diff: selectedDifficulty(), target: settings.target, seed: newSeed()});
     dispatch(drain());
   },
 
   showMenu() {
+    releaseLock(); resumeWanted = false;
     app.paused = false; menuEl.hidden = false; pauseEl.hidden = true; overEl.hidden = true; setEl.hidden = true; ui.cancelRebind();
     newMatch(app.S, {demo: true, seed: newSeed()});
     dispatch(drain());
     document.getElementById('b2p').focus({preventScroll: true});
   },
 
-  togglePause() {
-    if (app.paused) { app.paused = false; pauseEl.hidden = true; }
-    else if (app.S.phase !== 'over') { app.paused = true; pauseEl.hidden = false; clearKeys(); document.getElementById('bresume').focus({preventScroll: true}); }
+  pause() {
+    if (app.paused || app.S.phase === 'over' || app.S.mode.demo) return;
+    app.paused = true; resumeWanted = false; pauseEl.hidden = false; clearKeys(); releaseLock();
+    setPauseHint(settings.mouseAim);
+    document.getElementById('bresume').focus({preventScroll: true});
+  },
+
+  // With mouse aiming, resuming must re-grab the mouse first; the game
+  // continues once the browser confirms the lock (see onLockChange below).
+  resume() {
+    if (!app.paused) return;
+    if (mousePlayer(app.S) < 0) { app.paused = false; pauseEl.hidden = true; return; }
+    resumeWanted = true;
+    requestLock().catch(() => { resumeWanted = false; setPauseNote('Click Resume to grab the mouse. (Right after Esc, the browser may need a second.)'); });
   },
 };
+
+onLockChange(locked => {
+  if (locked && resumeWanted) { resumeWanted = false; app.paused = false; pauseEl.hidden = true; }
+  else if (!locked && wantsLock()) app.pause(); // Esc, alt-tab, clicking away
+});
+
+// Safety net: if the mouse should be locked but isn't for a moment
+// (e.g. the browser refused the lock), pause so the player can click Resume.
+let unlockedSince = null;
+function checkLock(now) {
+  if (wantsLock() && !isLocked()) { if (unlockedSince === null) unlockedSince = now; else if (now - unlockedSince > 400) { unlockedSince = null; app.pause(); } }
+  else unlockedSince = null;
+}
 
 // React to what happened inside the simulation this tick.
 function dispatch(events) {
@@ -62,9 +92,9 @@ function dispatch(events) {
       case 'callout': callout(e.text, C[e.color], e.dur); break;
       case 'lamp': setLamp(e.p, e.on); break;
       case 'kill': onKill(e.victim, e.hit); slow = .8; sfx('kill', S.mode.demo); break;
-      case 'roundStart': resetRound(S); slow = 0; setLamp(0, false); setLamp(1, false); hud(S); break;
+      case 'roundStart': resetRound(S); resetCross(S.F[0].face); slow = 0; setLamp(0, false); setLamp(1, false); hud(S); break;
       case 'score': hud(S); break;
-      case 'matchOver': showGameOver(S, e.winner); break;
+      case 'matchOver': releaseLock(); showGameOver(S, e.winner); break;
       case 'matchStart': case 'clearDecals': clearDecals(); break;
     }
   }
@@ -88,7 +118,9 @@ function frame(now) {
     let n = 0; while (acc >= DT && n < 12) { tick(); acc -= DT; n++; } if (n >= 12) acc = 0;
     updateRealtime(rdt);
   }
-  render(app.S);
+  checkLock(now);
+  const mp = mousePlayer(app.S);
+  render(app.S, mp >= 0 && isLocked() ? {p: mp, x: cross.x, y: cross.y} : null);
   requestAnimationFrame(frame);
 }
 

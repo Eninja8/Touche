@@ -26,9 +26,12 @@ function renderBinds() {
     }
     tb.appendChild(tr);
   }
+  $('key-fs').textContent = settings.fullscreenKey ? keyLabel(settings.fullscreenKey) : 'Not set';
+  $('key-fs').classList.remove('listening');
 }
 
 function finishRebind(code) {
+  if (rebinding.fs) { finishFullscreenRebind(code); return; }
   const {p, a} = rebinding; rebinding = null; let msg = '';
   if (code === 'KeyM') msg = 'M is reserved for mute.';
   else if (code !== 'Escape') {
@@ -40,11 +43,30 @@ function finishRebind(code) {
   renderBinds(); $('bindNote').textContent = msg; const nb = $(`key-${p}-${a}`); if (nb) nb.focus();
 }
 
+// The fullscreen key is a single global key, not per player. It can't share a key with a player action.
+function finishFullscreenRebind(code) {
+  rebinding = null; let msg = '';
+  const used = settings.binds.some(b => Object.values(b).includes(code));
+  if (code === 'KeyM') msg = 'M is reserved for mute.';
+  else if (used) msg = 'That key is already used by a player.';
+  else if (code !== 'Escape') { settings.fullscreenKey = code; saveSettings(); }
+  renderBinds(); $('bindNote').textContent = msg; $('key-fs').focus();
+}
+
+// ---------- fullscreen ----------
+export function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else document.documentElement.requestFullscreen().catch(() => {});
+}
+function syncFullscreenButtons() { document.querySelectorAll('[data-fs]').forEach(b => b.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'); }
+
 // ---------- settings panel ----------
 function syncSettingsUI() {
   $('vol').value = Math.round(settings.volume * 100); $('volOut').textContent = $('vol').value; $('mute').checked = settings.muted;
   const t = document.querySelector(`input[name="target"][value="${settings.target}"]`); if (t) t.checked = true;
   $('shake').checked = settings.shake; $('gore').checked = settings.blood; renderBinds();
+  document.querySelector(`input[name="mouseaim"][value="${settings.mouseAim ? 'on' : 'off'}"]`).checked = true;
+  $('sens').value = Math.round(settings.sens * 100); $('sensOut').textContent = settings.sens.toFixed(2);
 }
 function showTab(t) {
   document.querySelectorAll('.tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
@@ -67,6 +89,9 @@ export function showGameOver(S, w) {
   $('winScore').textContent = `${S.scores[0]} – ${S.scores[1]}`;
   overEl.hidden = false; $('brematch').focus({preventScroll: true});
 }
+// Pause screen text depends on whether resuming needs a click to grab the mouse again.
+export function setPauseHint(needsClick) { $('pauseHint').textContent = needsClick ? 'Click Resume to grab the mouse again' : 'Esc to resume'; $('pauseNote').textContent = ''; }
+export function setPauseNote(t) { $('pauseNote').textContent = t; }
 export const selectedDifficulty = () => { const sel = document.querySelector('input[name="diff"]:checked'); return sel ? sel.value : 'normal'; };
 
 // Wire up all buttons. Returns the hooks input.js needs.
@@ -78,13 +103,19 @@ export function initMenus(app) {
   document.querySelectorAll('input[name="target"]').forEach(r => r.addEventListener('change', () => { settings.target = +r.value; saveSettings(); }));
   $('shake').addEventListener('change', e => { settings.shake = e.target.checked; saveSettings(); });
   $('gore').addEventListener('change', e => { settings.blood = e.target.checked; saveSettings(); });
-  $('bresetKeys').addEventListener('click', () => { settings.binds = JSON.parse(JSON.stringify(DEFAULT_BINDS)); saveSettings(); renderBinds(); $('bindNote').textContent = 'Controls reset.'; });
+  $('bresetKeys').addEventListener('click', () => { settings.binds = JSON.parse(JSON.stringify(DEFAULT_BINDS)); settings.fullscreenKey = null; saveSettings(); renderBinds(); $('bindNote').textContent = 'Controls reset.'; });
+  document.querySelectorAll('input[name="mouseaim"]').forEach(r => r.addEventListener('change', () => { settings.mouseAim = r.value === 'on'; saveSettings(); }));
+  $('sens').addEventListener('input', e => { settings.sens = e.target.value / 100; $('sensOut').textContent = settings.sens.toFixed(2); saveSettings(); });
+  $('key-fs').addEventListener('click', () => { rebinding = {fs: true}; renderBinds(); const b = $('key-fs'); b.textContent = 'Press a key…'; b.classList.add('listening'); b.focus(); });
+  $('bclearFs').addEventListener('click', () => { settings.fullscreenKey = null; saveSettings(); renderBinds(); });
+  document.querySelectorAll('[data-fs]').forEach(b => b.addEventListener('click', toggleFullscreen));
+  document.addEventListener('fullscreenchange', syncFullscreenButtons);
   $('bclose').addEventListener('click', closeSettings);
   $('bset1').addEventListener('click', () => openSettings('menu'));
   $('bset2').addEventListener('click', () => openSettings('pause'));
   $('b2p').addEventListener('click', () => app.startMatch(false));
   $('bcpu').addEventListener('click', () => app.startMatch(true));
-  $('bresume').addEventListener('click', () => app.togglePause());
+  $('bresume').addEventListener('click', () => app.resume());
   $('bquit').addEventListener('click', () => app.showMenu());
   $('brematch').addEventListener('click', () => app.startMatch(app.S.mode.vsCPU));
   $('bmenu').addEventListener('click', () => app.showMenu());

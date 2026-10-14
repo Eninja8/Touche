@@ -23,7 +23,7 @@ New to coding; Claude does most of the work. Explain things in plain language, a
   - never read clocks, the DOM, `settings`, or `localStorage`
   - keep all gameplay state inside `S` (so `snapshot(S)` = save, restoring = rewind)
   - don't play sounds or spawn particles; `emit()` an event instead (see `events.js`)
-- `src/ui/input.js` turns keys and mouse into per-tick **commands** `{held, presses, aim}`. Those commands are the only way input reaches the sim, and they're what online play will send over the network.
+- `src/ui/input.js` turns keys and mouse into per-tick **commands** `{held, presses, aim}` (`aim` = mouse crosshair offset from the shoulder in whole pixels, or null for keyboard aiming; `src/ui/mouse.js` handles pointer lock). Those commands are the only way input reaches the sim, and they're what online play will send over the network.
 - `src/view/` (render, fx, audio, theme) only reads the sim and reacts to its events. It may use `Math.random` because it's purely cosmetic.
 - `src/main.js` runs the fixed-tick loop. KO slow motion only changes how fast ticks are fed in; it never changes the tick itself.
 

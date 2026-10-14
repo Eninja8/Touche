@@ -4,6 +4,7 @@
 import {
   DT, GROUND, LEFT, RIGHT, GRAV, JUMP_V, DJUMP_V, RUN_MAX, CROUCH_MAX, RUN_ACC, AIR_ACC,
   GROUND_FRIC, AIR_FRIC, DASH_V, DASH_T, DASH_CD, SLIDE_T, SLIDE_V, BLADE, ARM, ANG_MIN, ANG_MAX, PLATFORMS,
+  MOUSE_TURN, AIM_DEADZONE,
 } from './constants.js';
 import {clamp, lerp, ik} from './util.js';
 import {emit} from './events.js';
@@ -69,11 +70,18 @@ export const bodyParts = P => [
 export const lungeActive = f => f.lunge && f.lunge.t >= .05 && f.lunge.t < .2;
 
 // Recompute the pose and remember last tick's blade so we know how fast it moved.
-export function finishPose(f) {
+// `flipped`: a mouse player turned around this tick. Turning shifts the shoulder a
+// few pixels; that jump is removed from the blade speed so only real swings count.
+export function finishPose(f, flipped) {
   f.prevHand = f.P ? {x: f.P.hand.x, y: f.P.hand.y} : null;
   f.prevTip = f.P ? {x: f.P.tip.x, y: f.P.tip.y} : null;
   f.P = pose(f);
   if (!f.prevHand) { f.prevHand = {...f.P.hand}; f.prevTip = {...f.P.tip}; }
+  else if (flipped) {
+    const unturned = pose({...f, face: -f.face, angle: Math.PI - f.angle});
+    const sx = f.P.sh.x - unturned.sh.x, sy = f.P.sh.y - unturned.sh.y;
+    f.prevHand.x += sx; f.prevHand.y += sy; f.prevTip.x += sx; f.prevTip.y += sy;
+  }
   f.tipSpeed = Math.hypot(f.P.tip.x - f.prevTip.x, f.P.tip.y - f.prevTip.y) / DT;
 }
 
@@ -90,10 +98,19 @@ export function updateFighter(f, i, o, dt) {
   const stunned = f.stunT > 0; if (stunned) f.stunT -= dt;
   const dir = (i.right ? 1 : 0) - (i.left ? 1 : 0);
 
-  // face the opponent (locked during thrust and slide)
-  if (!f.lunge && f.slideT <= 0 && o) {
-    const nf = o.x >= f.x ? 1 : -1;
-    if (nf !== f.face && Math.abs(o.x - f.x) > 6) { f.face = nf; f.noLethal = Math.max(f.noLethal, .12); }
+  // Facing (locked during thrust and slide).
+  // Mouse players face whichever side their crosshair is on. Turning mirrors the
+  // blade angle so the blade keeps pointing the same way in the world (no snap).
+  // Keyboard players auto-face the opponent; their blade does flip, so it is
+  // briefly made harmless to stop the flip itself counting as a lethal swing.
+  let flipped = false;
+  if (!f.lunge && f.slideT <= 0) {
+    if (i.aim) {
+      if (Math.abs(i.aim.x) >= AIM_DEADZONE) { const nf = Math.sign(i.aim.x); if (nf !== f.face) { f.face = nf; f.angle = Math.PI - f.angle; flipped = true; } }
+    } else if (o) {
+      const nf = o.x >= f.x ? 1 : -1;
+      if (nf !== f.face && Math.abs(o.x - f.x) > 6) { f.face = nf; f.noLethal = Math.max(f.noLethal, .12); }
+    }
   }
 
   // thrust timeline: windup .05, point live until .2, recover until .44
@@ -136,11 +153,13 @@ export function updateFighter(f, i, o, dt) {
     else f.vx -= Math.sign(f.vx) * Math.min(Math.abs(f.vx), fr * dt);
   }
 
-  // blade angle: follow the mouse target if there is one, otherwise raise/lower keys
+  // Blade angle. Mouse: turn toward the crosshair (aim = offset from the shoulder)
+  // at a capped speed. After a turn the angle can be "behind" (up to π - ANG_MIN),
+  // and it sweeps back over the top. Keyboard: raise/lower keys.
   const spdMul = stunned ? .4 : 1;
-  if (i.aim && f.P) {
-    const sh = f.P.sh, tg = clamp(Math.atan2(-(i.aim.y - sh.y), (i.aim.x - sh.x) * f.face), ANG_MIN, ANG_MAX), sp = 9.5 * spdMul;
-    f.angle += clamp(tg - f.angle, -sp * dt, sp * dt);
+  if (i.aim) {
+    const tg = clamp(Math.atan2(-i.aim.y, i.aim.x * f.face), ANG_MIN, ANG_MAX), sp = MOUSE_TURN * spdMul;
+    f.angle = clamp(f.angle + clamp(tg - f.angle, -sp * dt, sp * dt), ANG_MIN, Math.PI - ANG_MIN);
   } else { const ad = (i.raise ? 1 : 0) - (i.lower ? 1 : 0); f.angle = clamp(f.angle + ad * f.angSpd * spdMul * dt, ANG_MIN, ANG_MAX); }
   f.deflect *= Math.exp(-7 * dt);
 
@@ -161,5 +180,5 @@ export function updateFighter(f, i, o, dt) {
   }
   if (wasGround && !f.onGround && f.vy >= 0) f.coyote = .08;
   if (f.onGround) f.phase += Math.abs(f.vx) * dt * .075;
-  finishPose(f);
+  finishPose(f, flipped);
 }
