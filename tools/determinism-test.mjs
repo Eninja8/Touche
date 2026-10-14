@@ -111,5 +111,33 @@ check(demo(42) === demo(42), 'CPU-vs-CPU demo bout is deterministic');
   check(killed && killed.victim.id === 1 && killed.hit.tip, `running onto the point kills (closing at ${killed ? Math.round(killed.hit.vx * G.F[0].P.dx + killed.hit.vy * G.F[0].P.dy) : 0} px/s, ${TIP_LETHAL} needed)`);
 }
 
+// 6. beats: a fast swing into a still blade knocks it aside; a run or a thrust doesn't count as a beat
+{
+  const keys = (o = {}) => ({held: {left: false, right: false, up: false, down: false, raise: false, lower: false, ...o}, presses: o.presses || [], aim: null});
+  const setup = () => { const G = createGame(1); newMatch(G, {demo: false, vsCPU: false, seed: 11}); for (let k = 0; k < 160; k++) { step(G, [keys(), keys()]); drain(); } return G; };
+  const run = (G, red, green, n, seen) => { for (let k = 0; k < n; k++) { step(G, [red, green]); for (const e of drain()) seen.push(e.type === 'text' ? e.text : e.type === 'sfx' ? 'sfx:' + e.name : e.type); } };
+  // Red lowers its blade, Green walks in with a level blade, Red swings up through it
+  let G = setup(), seen = [];
+  run(G, keys({lower: true}), keys(), 60, seen);
+  while (G.F[1].x - G.F[0].x > 150) run(G, keys({lower: true}), keys({left: true}), 1, seen);
+  run(G, keys({lower: true}), keys(), 30, seen); seen = [];
+  let beatTick = -1;
+  for (let k = 0; k < 60 && beatTick < 0; k++) { run(G, keys({raise: true}), keys(), 1, seen); if (seen.includes('beat')) beatTick = k; }
+  const g = G.F[1];
+  check(beatTick >= 0 && seen.includes('sfx:beat') && seen.includes('BEAT'), `a fast swing into a still blade is a beat (Red swung at ${Math.round(G.F[0].swingSpeed)} px/s)`);
+  check(g.beatT > .3 && g.noLethal > .3 && g.lungeCD > .3 && Math.abs(g.deflect) > 1, `the beaten blade is knocked wide (${g.deflect.toFixed(2)} rad) and harmless for ${g.noLethal.toFixed(2)} s`);
+  check(G.F[0].alive && g.alive, 'nobody was touched by the beat itself');
+  // both blades level, Red runs its still blade into Green's: a normal clash
+  G = setup(); seen = [];
+  for (let k = 0; k < 120 && !seen.includes('sfx:clash') && !seen.includes('beat'); k++) run(G, keys({right: true}), keys(), 1, seen);
+  check(seen.includes('sfx:clash') && !seen.includes('beat'), 'running a still blade into another is a normal clash, not a beat');
+  // Red thrusts into Green's still blade: still a parry
+  G = setup(); seen = [];
+  while (G.F[1].x - G.F[0].x > 175) run(G, keys({right: true}), keys(), 1, seen);
+  run(G, keys(), keys(), 30, seen); seen = [];
+  run(G, keys({presses: ['attack']}), keys(), 1, seen); run(G, keys(), keys(), 40, seen);
+  check(seen.includes('PARRY') && !seen.includes('beat'), 'a thrust into a still blade is still a parry');
+}
+
 console.log(failed ? '\nSome checks FAILED.' : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

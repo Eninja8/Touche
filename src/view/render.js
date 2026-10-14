@@ -78,7 +78,10 @@ function drawFighter(f, look) {
   ctx.globalAlpha = .5; ctx.strokeStyle = C.hall; ctx.lineWidth = .8;
   for (let k = -6; k <= 6; k += 3) { ctx.beginPath(); ctx.moveTo(P.head.x + s * 1, P.head.y + k); ctx.lineTo(P.head.x + s * 11, P.head.y + k); ctx.stroke(); }
   ctx.restore(); ctx.globalAlpha = 1;
+  // a beaten blade is drawn faded while it's knocked aside and harmless
+  if (f.beatT > 0) ctx.globalAlpha = .4;
   drawBlade(P, col, lungeActive(f) || (f.tipSpeed >= LETHAL * .85 && f.noLethal <= 0));
+  ctx.globalAlpha = 1;
   ctx.strokeStyle = col; line([P.sh, P.elbow, P.hand], 5);
   // stun stars
   if (f.stunT > 0) { const t = performance.now() / 120; ctx.fillStyle = C.spark; for (let k = 0; k < 3; k++) { const a = t + k * 2.09; ctx.beginPath(); ctx.arc(P.head.x + Math.cos(a) * 14, P.head.y - 18 + Math.sin(a) * 4, 2.4, 0, Math.PI * 2); ctx.fill(); } }
@@ -100,8 +103,9 @@ function drawSword(s) {
 function drawFx() {
   for (const p of fx) {
     const a = Math.max(0, p.life / p.max);
-    if (p.type === 'spark') { ctx.strokeStyle = C.spark; ctx.globalAlpha = a; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * .025, p.y - p.vy * .025); ctx.stroke(); }
+    if (p.type === 'spark') { ctx.strokeStyle = p.color || C.spark; ctx.globalAlpha = a; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * .025, p.y - p.vy * .025); ctx.stroke(); }
     else if (p.type === 'blood') { ctx.fillStyle = C.blood; ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+    else if (p.type === 'ring') { const k = 1 - a; ctx.strokeStyle = C.ink; ctx.globalAlpha = a * .8; ctx.lineWidth = 3 * a + 1; ctx.beginPath(); ctx.arc(p.x, p.y, 6 + 30 * k, 0, Math.PI * 2); ctx.stroke(); }
     else if (p.type === 'puff') { ctx.fillStyle = C.muted; ctx.globalAlpha = a * .35; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.6 - a * .6), 0, Math.PI * 2); ctx.fill(); }
     else if (p.type === 'text') { ctx.fillStyle = p.color; ctx.globalAlpha = Math.min(1, a * 1.6); ctx.font = '900 26px "Big Shoulders Display", Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.text, p.x, p.y); }
   }

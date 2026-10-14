@@ -9,11 +9,12 @@ import {random, rand} from './rng.js';
 
 // react: seconds between decisions; block: chance to defend a thrust;
 // aggro: how often it attacks; ang: blade turn speed; err: aim wobble;
-// slide: chance to read an incoming slide; slideReact: how fast it notices (s).
+// slide: chance to read an incoming slide; slideReact: how fast it notices (s);
+// beat: chance to try a beat when the opponent's point is close and still.
 export const DIFF = {
-  easy: {react: .24, block: .3, aggro: .4, ang: 4.2, err: .35, slide: .3, slideReact: .2},
-  normal: {react: .15, block: .55, aggro: .6, ang: 5.2, err: .2, slide: .75, slideReact: .08},
-  hard: {react: .085, block: .8, aggro: .75, ang: 6.2, err: .1, slide: .92, slideReact: .05},
+  easy: {react: .24, block: .3, aggro: .4, ang: 4.2, err: .35, slide: .3, slideReact: .2, beat: 0},
+  normal: {react: .15, block: .55, aggro: .6, ang: 5.2, err: .2, slide: .75, slideReact: .08, beat: .06},
+  hard: {react: .085, block: .8, aggro: .75, ang: 6.2, err: .1, slide: .92, slideReact: .05, beat: .12},
 };
 
 // slideSeen: the opponent's current slide was already noticed; slideIn: seconds until it reacts
@@ -62,7 +63,7 @@ function think(S, me, op, i, A, d) {
   if (!op.alive) { A.move = 0; A.targetAng = 1.1; return; }
   const dx = op.x - me.x, dist = Math.abs(dx), toward = Math.sign(dx) || 1;
   const threat = op.lunge && op.lunge.t < .2 && dist < 200;
-  const opOpen = (op.lunge && op.lunge.t >= .2) || op.stunT > 0;
+  const opOpen = (op.lunge && op.lunge.t >= .2) || op.stunT > 0 || op.beatT > 0;
   if (threat && random(S) < d.block) {
     const r = random(S);
     if (r < .45) { A.move = -toward; i.buf.dash = .1; }
@@ -72,6 +73,13 @@ function think(S, me, op, i, A, d) {
   }
   const r = random(S), tg = r < .3 ? op.P.head : r < .8 ? {x: (op.P.neck.x + op.P.hip.x) / 2, y: (op.P.neck.y + op.P.hip.y) / 2} : op.P.kF;
   A.targetAng = aimAt(me, tg) + rand(S, -d.err, d.err);
+  // Beat: the opponent's point is within reach and nearly still, so swing hard through it.
+  // (Then opOpen above makes a thrust likely while their blade is knocked aside.)
+  const reach = Math.hypot(op.P.tip.x - me.P.sh.x, op.P.tip.y - me.P.sh.y);
+  if (reach < 96 && op.swingSpeed < 200 && !op.lunge && op.beatT <= 0 && random(S) < d.beat) {
+    const at = aimAt(me, op.P.tip); A.targetAng = at + (me.angle > at ? -.7 : .7); A.move = 0; A.t = .25;
+    return;
+  }
   const want = rand(S, 120, 160);
   if (dist > want + 25) A.move = toward; else if (dist < want - 35) A.move = -toward;
   else { const q = random(S); A.move = q < .35 ? toward : q < .65 ? 0 : -toward; }

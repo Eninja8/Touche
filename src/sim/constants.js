@@ -21,6 +21,13 @@ export const LETHAL = 600, TIP_LETHAL = 250, TIP_ZONE = 0.15;
 // tick) and the holder takes PUSH_HOLDER of that shove themselves.
 export const PUSH_MAX = 24, PUSH_HOLDER = 0.25;
 
+// The beat: when blades meet and one point is being swung at BEAT_SPEED (px/s) or more
+// (measured from how fast the blade turns, so carrying a still blade at a run doesn't count)
+// while the other moves at most BEAT_RATIO of that speed, the slower blade is knocked
+// BEAT_KNOCK radians wide and can't kill (or thrust) for BEAT_OPEN seconds.
+// (Thrusts meeting a blade are parries instead, as before.)
+export const BEAT_SPEED = 450, BEAT_RATIO = 0.5, BEAT_KNOCK = 1.3, BEAT_OPEN = 0.35;
+
 // How long a key press is remembered if it can't be used straight away (seconds)
 export const PRESS_BUFFER = 0.13;
 

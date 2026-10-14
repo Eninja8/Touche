@@ -13,8 +13,8 @@ export function mkFighter(id, x, y, face) {
   return {
     id, x, y, vx: 0, vy: 0, face, onGround: true, onPlat: false, crouch: false,
     slideT: 0, dashT: 0, dashCD: 0, airDash: true, airJump: true, wallSide: 0, wallT: 0, coyote: 0, dropT: 0,
-    angle: .18, deflect: 0, lunge: null, lungeCD: 0, stunT: 0, noLethal: 0, alive: true, phase: 0,
-    P: null, prevHand: null, prevTip: null, tipSpeed: 0, angSpd: 5.2,
+    angle: .18, deflect: 0, lunge: null, lungeCD: 0, stunT: 0, noLethal: 0, beatT: 0, alive: true, phase: 0,
+    P: null, prevHand: null, prevTip: null, tipSpeed: 0, swingSpeed: 0, prevAng: null, angSpd: 5.2,
   };
 }
 
@@ -83,6 +83,13 @@ export function finishPose(f, flipped) {
     f.prevHand.x += sx; f.prevHand.y += sy; f.prevTip.x += sx; f.prevTip.y += sy;
   }
   f.tipSpeed = Math.hypot(f.P.tip.x - f.prevTip.x, f.P.tip.y - f.prevTip.y) / DT;
+  // How fast the blade is being swung (used for beats): its turning speed times its reach.
+  // Running, sliding or crouching moves the blade but isn't a swing, so it doesn't count.
+  // A mouse player's turn mirrors the angle, so the old angle is mirrored too.
+  const a = f.angle + f.deflect;
+  if (f.prevAng === null) f.prevAng = a; else if (flipped) f.prevAng = Math.PI - f.prevAng;
+  f.swingSpeed = Math.abs(a - f.prevAng) / DT * (ARM + BLADE);
+  f.prevAng = a;
 }
 
 const puff = (x, y, n) => emit('puff', {x, y, n});
@@ -93,7 +100,7 @@ export function updateFighter(f, i, o, dt, map) {
   const {floor, platforms} = map, {left, right} = map.walls;
   if (!f.alive) return;
   const prevY = f.y;
-  f.dashCD = Math.max(0, f.dashCD - dt); f.lungeCD = Math.max(0, f.lungeCD - dt); f.noLethal = Math.max(0, f.noLethal - dt);
+  f.dashCD = Math.max(0, f.dashCD - dt); f.lungeCD = Math.max(0, f.lungeCD - dt); f.noLethal = Math.max(0, f.noLethal - dt); f.beatT = Math.max(0, f.beatT - dt);
   f.dropT = Math.max(0, f.dropT - dt); f.wallT = Math.max(0, f.wallT - dt); f.coyote = Math.max(0, f.coyote - dt);
   for (const k in i.buf) i.buf[k] = Math.max(0, i.buf[k] - dt);
   const stunned = f.stunT > 0; if (stunned) f.stunT -= dt;

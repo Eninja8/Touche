@@ -6,13 +6,13 @@
 - **Live:** https://eninja8.github.io/Touche/ (GitHub Pages, updates on every push to `main`).
 - **Code:** split into `src/sim` (deterministic simulation), `src/view` (drawing, effects, sound) and `src/ui` (input, menus). See README.md for the layout.
 - **Determinism:** `npm test` passes: same seed gives the same match, and rewind-and-replay matches exactly.
-- **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove.
+- **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 600 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove. **Beats:** a blade swung at `BEAT_SPEED` = 450 px/s or more into a blade moving at most `BEAT_RATIO` = 0.5 of that is knocked `BEAT_KNOCK` = 1.3 rad wide and harmless for `BEAT_OPEN` = 0.35 s.
 - **Next:** owner playtests Phase B. Then Phase C (maps and hazards), Phase D (power-ups), stopping after each for a playtest.
 
 ## Roadmap
 1. Online 1v1 with room codes (built; being playtested).
 2. Phase A: menus and UI cleanup (done).
-3. Phase B: combat tuning (CPU reacts to slides; "beat" the blade away).
+3. Phase B: combat tuning (built; being playtested).
 4. Phase C: maps and hazards (Frozen Lake, Rooftops, Dojo, Forge; ring-out; Hazards on/off; speed and jump pads; random map options).
 5. Phase D: power-ups (Swift, Long Blade, Air Dash, Throwing Knife; Power-ups on/off).
 6. Controller support (Gamepad API). Not started.
@@ -105,3 +105,24 @@ Owner's request: fencers could walk into each other and the point passed through
 - An Esc that just released the mouse no longer also counts as "back" in menus.
 - New `rdy` message; online version bumped to 4.
 - *Checked:* two-window test: Start stayed grey until both were ready, greyed out when the joiner un-readied, ignored clicks while grey, and the match plus rematch ran with matching scores. Mouse-grab test with real clicks: Ready grabbed the mouse on both windows; releasing it un-readied the joiner and greyed out Start; the host's click anywhere started the match with both mice still grabbed and no pause screen.
+
+### 2026-10-14: Phase B, combat tuning
+**CPU vs slides** (`src/sim/ai.js`):
+- The CPU now notices an incoming slide (chance by difficulty: easy 30%, normal 75%, hard 92%) after a reaction delay (easy 0.2 s, normal 0.08 s, hard 0.05 s), then picks an answer:
+  - **Meet:** point the blade at the incoming point, so the blades clash or the slider runs onto it.
+  - **Jump:** jump just before the point arrives (timed from where the slider's point is, not their body).
+  - **Back off:** dash away when it's too late for anything else.
+- While answering it doesn't start other moves (such as lunging into the slide).
+- Measured with a scripted player sliding from random distances (300 slides per difficulty). How often the slide killed the CPU: easy 27% → ~30% (unchanged within noise), normal 24% → 10%, hard 18% → 7%. How often the CPU killed the slider instead: about 20% on Normal and Hard.
+- Bug found while tuning: the first "back off" dashed toward the slider.
+
+**Beats** (`src/sim/combat.js`, numbers in `constants.js`):
+- When blades meet, neither fencer is thrusting, and one blade is being swung at 450 px/s or more while the other moves at most half that, it's a beat:
+  - The slower blade is knocked 1.3 rad wide, the way the attacker was swinging.
+  - That blade can't kill and its owner can't thrust for 0.35 s, which is the attacker's opening.
+  - The attacker's own blade is harmless for only 0.08 s, so the same swing can't kill straight through.
+- Thrusts meeting a blade are still parries, as before.
+- *Swing speed* is how fast the blade turns (angle change × reach), not how fast the point moves. Otherwise running, sliding or a pose change (the body dropping into a slide) counted as a "swing". That bug showed up in testing: sliders were beating the CPU's blade aside.
+- *Look and sound:* a quick ring burst with pale streaks, a "BEAT" label in the attacker's colour, a short freeze, a sharper "tak-ting" sound, and the beaten blade drawn faded while it's harmless.
+- *CPU:* on Normal and Hard it sometimes swings hard through a nearby, still point on purpose (6% / 12% per decision when in reach), and it presses the attack while your blade is beaten aside. Beats also happen naturally whenever a full-speed swing crosses a still blade.
+- *Tests* (`npm test`): a fast swing into a still blade is a beat (knocked 1.3 rad wide, harmless 0.35 s, nobody touched); running a still blade into another is a normal clash; a thrust into a still blade is still a parry. All rollback network tests pass. Two-window online test at about 145 ms ping with 3% loss: scores matched and there were no errors. Online version bumped to 5.

@@ -25,7 +25,9 @@ const dctx = decals.getContext('2d');
 export function clearDecals(map) { decals.width = map.width * 2; decals.height = map.height * 2; }
 function splat(x, y, r) { dctx.fillStyle = C.blood; dctx.globalAlpha = .85; dctx.beginPath(); dctx.ellipse(x * 2, y * 2, r * 3.2, r * 1.1, 0, 0, Math.PI * 2); dctx.fill(); dctx.globalAlpha = 1; }
 
-export function sparks(x, y, n, tag) { for (let k = 0; k < n; k++) { const a = rnd(0, Math.PI * 2), s = rnd(150, 620); fx.push({type: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: rnd(.15, .32), max: .32, tag}); } }
+export function sparks(x, y, n, tag, color) { for (let k = 0; k < n; k++) { const a = rnd(0, Math.PI * 2), s = rnd(150, 620); fx.push({type: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120, life: rnd(.15, .32), max: .32, tag, color}); } }
+// A beat: a quick ring plus pale streaks, so it reads differently from a normal clash.
+export function beatFx(x, y) { fx.push({type: 'ring', x, y, life: .22, max: .22}); sparks(x, y, 10, undefined, C.ink); }
 function blood(x, y, vx, vy, n, tag) { const sp = Math.hypot(vx, vy) || 1; for (let k = 0; k < n; k++) { const s = rnd(.15, .65); fx.push({type: 'blood', x, y, vx: vx / sp * Math.min(sp, 900) * s + rnd(-160, 160), vy: vy / sp * Math.min(sp, 900) * s + rnd(-320, 60), life: 3, max: 3, size: rnd(1.6, 4), tag}); } }
 export function puff(x, y, n) { for (let k = 0; k < n; k++) fx.push({type: 'puff', x: x + rnd(-8, 8), y, vx: rnd(-90, 90), vy: rnd(-50, -10), life: rnd(.25, .4), max: .4, size: rnd(3, 6)}); }
 export function callout(text, color, dur) { view.callout = {text, color, t: 0, dur}; }

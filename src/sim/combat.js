@@ -1,6 +1,6 @@
 // Blade-on-body hits, blade-on-blade clashes, parries and kills.
 
-import {DT, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS} from './constants.js';
+import {DT, LETHAL, TIP_LETHAL, TIP_ZONE, PUSH_MAX, PUSH_HOLDER, HITSTOP_TICKS, BEAT_SPEED, BEAT_RATIO, BEAT_KNOCK, BEAT_OPEN} from './constants.js';
 import {clamp, lerp, distPtSeg, distPtSegX} from './util.js';
 import {bodyParts, lungeActive} from './fighter.js';
 import {emit} from './events.js';
@@ -70,10 +70,13 @@ export function bladePush(A, B, map) {
   if (A.vx * dir > 0) A.vx *= .5;
 }
 
-// Blades met. If only one fencer was thrusting, the other parries.
+// Blades met. If only one fencer was thrusting, the other parries. If neither was
+// thrusting and one blade was swinging much faster, it beats the other aside.
 export function clash(S, A, B, pt) {
   S.clashCD = .14; A.noLethal = B.noLethal = .14;
   const aAct = A.lunge && A.lunge.t >= .03 && A.lunge.t < .2, bAct = B.lunge && B.lunge.t >= .03 && B.lunge.t < .2;
+  const fast = A.swingSpeed >= B.swingSpeed ? A : B, slow = fast === A ? B : A;
+  if (!aAct && !bAct && fast.swingSpeed >= BEAT_SPEED && slow.swingSpeed <= fast.swingSpeed * BEAT_RATIO) { beat(S, fast, slow, pt); return; }
   emit('sparks', {x: pt.x, y: pt.y, n: 16}); emit('shake', {amount: 5});
   S.hitstop = HITSTOP_TICKS;
   if (aAct && !bAct) parry(A, B, pt);
@@ -83,6 +86,20 @@ export function clash(S, A, B, pt) {
     const up = A.P.tip.y < B.P.tip.y; A.deflect += up ? .55 : -.55; B.deflect += up ? -.55 : .55;
     emit('sfx', {name: 'clash'});
   }
+}
+
+// F's fast blade knocked S's slower blade wide (the way F was swinging): S can't kill
+// or thrust for a moment, which is F's opening. F's own blade is only briefly harmless.
+function beat(S, F, V, pt) {
+  const down = F.P.tip.y > F.prevTip.y; // F was swinging downward
+  V.deflect += down ? -BEAT_KNOCK : BEAT_KNOCK;
+  V.noLethal = BEAT_OPEN; V.beatT = BEAT_OPEN; V.lungeCD = Math.max(V.lungeCD, BEAT_OPEN);
+  if (V.lunge) V.lunge = null;
+  F.noLethal = .08;
+  S.hitstop = Math.ceil(HITSTOP_TICKS / 2);
+  emit('beat', {x: pt.x, y: pt.y}); emit('shake', {amount: 3});
+  emit('text', {x: pt.x, y: pt.y - 24, text: 'BEAT', color: F.id ? 'green' : 'red'});
+  emit('sfx', {name: 'beat'});
 }
 
 // L lunged into D's blade: L is knocked back and stunned, D gets a free riposte.
