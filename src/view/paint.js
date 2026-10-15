@@ -49,26 +49,40 @@ export function parallax(ctx, key, map, layer, idx) {
   ctx.drawImage(c, sx - mx, sy - my, map.width + mx * 2, map.height + my * 2);
 }
 
-// Ambient particles (snow, rain, embers, dust, petals) filling the visible area. Each
-// particle's position comes from its index and the time, so nothing needs storing.
-// o: {n, color, size, fall (px/s, negative rises), drift (sideways px/s), sway, alpha, depth, len (streaks)}
+// Ambient particles (snow, rain, embers, dust, petals). Each layer is an endless pattern
+// of fixed-size tiles laid over the world, like wallpaper: a particle's place in its tile
+// comes from its index and the time (so nothing needs storing), and the pattern repeats
+// wherever the camera looks. The tiles never change size, so zooming just shows more or
+// fewer of them at the same density, and nothing pops in or jumps.
+// The pattern shifts with the camera like a parallax layer (same rule as above): depth 1
+// sits in the world, below 1 lags behind (farther away), above 1 moves ahead (nearer).
+// Movement depends only on the clock, so it looks the same at any frame rate.
+// o: {n (per tile), color, size, fall (px/s, negative rises), drift (sideways px/s), sway,
+//     swayRate, alpha, depth, len (streaks), twinkle, life (seconds each one glows, then fades)}
+const TILE_W = 1160, TILE_H = 740;
 export function particles(ctx, v, t, o) {
-  const w = v.x1 - v.x0 + 200, h = v.y1 - v.y0 + 200, depth = o.depth ?? .8;
-  // anchored to the screen with a little parallax, so they don't jump when the camera moves
-  const ax = v.x0 * depth, ay = v.y0 * depth;
-  ctx.fillStyle = o.color; ctx.strokeStyle = o.color;
-  for (let k = 0; k < o.n; k++) {
-    const sp = .6 + hash(k * 3 + 1) * .8;
-    let x = hash(k) * w + t * (o.drift || 0) * sp + Math.sin(t * (o.swayRate || 1.3) + k) * (o.sway || 0);
-    let y = hash(k * 7 + 2) * h + t * o.fall * sp;
-    x = ((x - ax) % w + w) % w + v.x0 - 100; y = ((y - ay) % h + h) % h + v.y0 - 100;
-    const a = o.alpha * (o.twinkle ? .5 + .5 * Math.sin(t * 3 + k) : 1) * (o.life ? lifeFade(y, v, o.life) : 1);
-    if (a <= 0) continue;
+  const k = 1 - (o.depth ?? .8), map = particleMap;
+  const ox = map ? (cam.x - map.width / 2) * k : 0, oy = map ? (cam.y - map.height / 2) * k * .6 : 0;
+  const m = 30 + (o.len || 0) + (o.size || 0) * 2, drift = o.drift || 0;
+  ctx.fillStyle = o.color; ctx.strokeStyle = o.color; if (o.len) ctx.lineWidth = o.size;
+  for (let i = 0; i < o.n; i++) {
+    const sp = .6 + hash(i * 3 + 1) * .8;
+    let a = o.alpha * (o.twinkle ? .5 + .5 * Math.sin(t * 3 + i) : 1);
+    if (o.life) { const p = frac(t / o.life + hash(i * 5 + 3)); a *= Math.min(1, p / .15) * (1 - p); }
+    if (a <= .01) continue;
+    // its place in the tile, then every copy of it that's on screen
+    const px = wrap(hash(i) * TILE_W + t * drift * sp + Math.sin(t * (o.swayRate || 1.3) + i) * (o.sway || 0), TILE_W) + ox;
+    const py = wrap(hash(i * 7 + 2) * TILE_H + t * o.fall * sp, TILE_H) + oy;
+    const x0 = px + Math.ceil((v.x0 - m - px) / TILE_W) * TILE_W, y0 = py + Math.ceil((v.y0 - m - py) / TILE_H) * TILE_H;
     ctx.globalAlpha = a;
-    if (o.len) { ctx.lineWidth = o.size; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - (o.drift || 0) * .03, y - o.len * sp); ctx.stroke(); }
-    else { const s = o.size * sp; ctx.fillRect(x - s / 2, y - s / 2, s, s); }
+    for (let y = y0; y < v.y1 + m; y += TILE_H) for (let x = x0; x < v.x1 + m; x += TILE_W) {
+      if (o.len) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - drift * .03, y - o.len * sp); ctx.stroke(); }
+      else { const s = o.size * sp; ctx.fillRect(x - s / 2, y - s / 2, s, s); }
+    }
   }
   ctx.globalAlpha = 1;
 }
-// rising particles (embers) fade out toward the top of the view
-const lifeFade = (y, v, life) => Math.max(0, Math.min(1, (y - v.y0) / ((v.y1 - v.y0) * life)));
+const frac = x => x - Math.floor(x), wrap = (x, w) => ((x % w) + w) % w;
+// the map being drawn (set by backdrops.js), so particles can follow the parallax rule
+let particleMap = null;
+export const setParticleMap = map => { particleMap = map; };

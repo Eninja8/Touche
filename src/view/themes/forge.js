@@ -86,7 +86,7 @@ export default {
     line(ctx, col.line, 2.5, [p.x, p.y, p.x + p.w, p.y]);
   },
   front(ctx, map, col, v, dark, t) {
-    particles(ctx, v, t, {n: 70, color: col.accent, size: 2.6, fall: -70, drift: 8, sway: 18, alpha: .85, life: .9, depth: .9});
-    particles(ctx, v, t + 50, {n: 16, color: '#ffe08a', size: 1.8, fall: -160, drift: -20, sway: 30, alpha: .9, life: .7, depth: .95});
+    particles(ctx, v, t, {n: 70, color: col.accent, size: 2.6, fall: -70, drift: 8, sway: 18, alpha: .85, life: 7, depth: .9});
+    particles(ctx, v, t + 50, {n: 16, color: '#ffe08a', size: 1.8, fall: -160, drift: -20, sway: 30, alpha: .9, life: 2.5, depth: .95});
   },
 };

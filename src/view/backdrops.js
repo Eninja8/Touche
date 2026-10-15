@@ -8,7 +8,7 @@
 //   block, platform, cover: how solid blocks, platforms and pit covers look (else arena.js defaults)
 //   haze(dark): optional [colour, alpha] laid over the background so the arena stands out (edges.js)
 
-import {parallax} from './paint.js';
+import {parallax, setParticleMap} from './paint.js';
 import {drawArena} from './arena.js';
 import {haze} from './edges.js';
 import castle from './themes/castle.js';
@@ -31,5 +31,6 @@ export function drawBack(ctx, map, v, dark, t) {
 
 export function drawFront(ctx, map, v, dark, t) {
   const th = THEMES[map.theme] || castle;
+  setParticleMap(map);
   if (th.front) th.front(ctx, map, map.colors[dark ? 'dark' : 'light'], v, dark, t);
 }

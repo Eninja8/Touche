@@ -14,7 +14,8 @@
 - **Aim styles** (Settings → Controls → Aim style): Free cursor (a pointer anywhere on screen, drawn as a ring with a dot), Arrow (crosshair tied to the fencer, faint chevron), Off (same crosshair, nothing drawn).
 - **Network stats:** press N for ping, jitter, loss, rollback frames/s, stalls, input delay and a ping graph. `?delay=3` (2 to 8) in the address tries a longer input delay on that computer.
 - **Blade rules** (tweak in `src/sim/constants.js`): a swing kills at `LETHAL` = 63% of full speed = 1197 px/s; the point (outer `TIP_ZONE` = 15% of the blade) kills when driven in at `TIP_LETHAL` = 250 px/s; thrusts always kill. Harmless contacts are solid: the body is shoved out (up to `PUSH_MAX` = 24 px per tick) and the holder takes `PUSH_HOLDER` = 25% of the shove. **Beats:** a blade swung at `BEAT_SPEED` = 47% of full speed = 893 px/s or more into a blade moving at most `BEAT_RATIO` = 0.5 of that is knocked `BEAT_KNOCK` = 1.3 rad wide and harmless for `BEAT_OPEN` = 0.35 s. The beating swing can't kill until it slows below `BEAT_SPEED`; the same player can't beat again for `BEAT_CD` = 0.6 s; a blade swinging back into the beat at `BEAT_MEET` = 21% = 399 px/s or more makes it a normal clash.
-- **Next:** owner playtests this feedback round (blade speed, Free cursor, fair power-ups, the input fix) and an online match with the N overlay open; then decide on adaptive input delay.
+- **Weather and camera:** ambient particles (snow, rain, petals, embers, dust) live in the world as tiled layers with parallax (`particles` in `src/view/paint.js`), so camera moves and zooms don't fling them. The camera ignores a normal jump (vertical dead zone `RISE` = 140 px, `DROP` = 60 px in `src/view/camera.js`) and eases up/down more gently (`FOLLOW_Y` = 3) than sideways (5).
+- **Next:** owner playtests this feedback round (blade speed, Free cursor, fair power-ups, the input fix, calmer weather and camera) and an online match with the N overlay open (waiting on a second player); then decide on adaptive input delay.
 
 ## Roadmap
 1. Online 1v1 with room codes (built; being playtested).
@@ -44,6 +45,13 @@ Goal: 3 or more fencers, last one standing (or first to N touches) wins.
 - **View:** the camera already frames a list of points; colours and names per player; the aim indicators already use the local player's index.
 
 ## Session log
+
+### 2026-10-14 — Calm weather particles, steadier camera
+Owner feedback: Free cursor, turn speed, the input fix and power-up fairness feel good. Weather moved wildly when the camera moved, zoomed or followed a jump.
+- **Cause:** particles were laid out in a box the size of the current view, so each zoom step reshuffled every one of them, and they were half-pinned to the screen, so camera moves dragged them.
+- **Fix (render only, the simulation and online play are untouched):** each particle layer is now a fixed-size tile (1160 x 740 px) repeated over the world like wallpaper. A particle's spot in its tile comes from its number and the clock, so falling and sway run at the same speed at any frame rate, and the camera never pushes them. Zooming just shows more or fewer tiles at the same density; wrapping is seamless, so nothing pops in. Each layer keeps its depth as parallax, with the same rule as the background layers: far layers lag a little, the Frozen Lake's near snow moves slightly ahead, nothing jerks. Forge embers now each glow for a few seconds and fade on their own (before, they faded by height on screen, which also changed when the camera moved).
+- **Camera:** vertical dead zone: the framing ignores a fencer rising up to 140 px (a normal jump is about 130 px) and the top edge ignores a drop up to 60 px; falling feet are followed at once so they never leave the screen. Up/down easing is gentler (3 per second vs 5 sideways). Ropes, jump pads and lower ledges are still followed.
+- Checks (Node, no browser available this session): at the same moment, every particle in a zoomed-in view sits at the same spot in a zoomed-out view, with the same density; a 100 px camera pan moves a depth-0.8 layer 20 px. Camera: a single or double-fencer jump moves it 0 px; a 400 px rope climb is followed. `npm test` all passing. Not yet checked by eye: that's the owner's playtest.
 
 ### 2026-10-14 — Feedback round: net stats, stuck inputs, faster blade, Free cursor, fair power-ups
 Owner feedback after the first real online test and Phase D. Known-good commit before: a40e0fb.
